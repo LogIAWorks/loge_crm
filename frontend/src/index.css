@@ -1,0 +1,85 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply bg-gray-50 text-gray-900 font-sans antialiased;
+  }
+
+  /* Refined scrollbar */
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: #CBD5E1;
+    border-radius: 99px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: #94A3B8;
+  }
+
+  /* Selection color */
+  ::selection {
+    background: #BAE6FD;
+    color: #0F1A2E;
+  }
+}
+
+@layer components {
+  /* Cards */
+  .card {
+    @apply bg-white rounded-2xl p-6 shadow-card border border-gray-100 transition-all duration-300;
+  }
+  .card:hover {
+    @apply shadow-card-hover;
+  }
+
+  /* Inputs — white-themed */
+  .input {
+    @apply w-full bg-white border border-gray-200 rounded-xl px-4 py-2.5 text-gray-900 placeholder-gray-400
+           focus:outline-none focus:ring-2 focus:ring-brand/30 focus:border-brand transition-all duration-200;
+  }
+  select.input {
+    @apply appearance-none cursor-pointer;
+    background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e");
+    background-position: right 0.75rem center;
+    background-repeat: no-repeat;
+    background-size: 1.25em 1.25em;
+    padding-right: 2.5rem;
+  }
+
+  /* Buttons */
+  .btn-primary {
+    @apply bg-brand hover:bg-brand-dark text-white font-semibold py-2.5 px-5 rounded-xl 
+           transition-all duration-200 flex items-center justify-center gap-2
+           shadow-sm hover:shadow-md active:scale-[0.98];
+  }
+  .btn-secondary {
+    @apply bg-white hover:bg-gray-50 text-gray-700 border border-gray-200 font-medium py-2.5 px-5 
+           rounded-xl transition-all duration-200 flex items-center justify-center gap-2
+           hover:border-gray-300 active:scale-[0.98];
+  }
+
+  /* Status badges */
+  .badge {
+    @apply inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-semibold tracking-wide;
+  }
+  .badge-blue { @apply bg-blue-50 text-blue-700 ring-1 ring-blue-200; }
+  .badge-green { @apply bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200; }
+  .badge-yellow { @apply bg-amber-50 text-amber-700 ring-1 ring-amber-200; }
+  .badge-red { @apply bg-red-50 text-red-700 ring-1 ring-red-200; }
+  .badge-purple { @apply bg-purple-50 text-purple-700 ring-1 ring-purple-200; }
+  .badge-gray { @apply bg-gray-100 text-gray-600 ring-1 ring-gray-200; }
+
+  /* Page animations */
+  .page-enter {
+    animation: fadeIn 0.4s ease-out forwards;
+  }
+}

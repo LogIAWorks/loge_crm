@@ -1,0 +1,11 @@
+node_modules/
+dist/
+.env
+*.env
+backups/
+*.sqlite
+*.log
+.DS_Store
+.playwright-mcp/
+# Volcado de migración con datos reales (no subir)
+supabase_migration.sql

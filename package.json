@@ -1,0 +1,23 @@
+{
+  "name": "logecrm",
+  "version": "1.0.0",
+  "description": "CRM for LOGE S.L.",
+  "main": "backend/server.js",
+  "scripts": {
+    "postinstall": "cd frontend && npm install",
+    "start": "npm run build --prefix frontend && node backend/server.js",
+    "dev": "concurrently \"npm run dev:server\" \"npm run dev:client\"",
+    "dev:server": "nodemon backend/server.js",
+    "dev:client": "npm run dev --prefix frontend"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "sqlite3": "^5.1.7"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2",
+    "nodemon": "^3.1.0"
+  }
+}

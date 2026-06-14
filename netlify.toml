@@ -1,0 +1,21 @@
+# Configuración de despliegue en Netlify.
+# El sitio es el frontend (React+Vite). Los datos van por Supabase (cloud),
+# así que no se despliega backend.
+
+[build]
+  base = "frontend"
+  command = "npm install && npm run build"
+  publish = "dist"
+
+# Variables de Supabase para el build. La anon key es pública por diseño
+# (va incrustada en el bundle del frontend); la seguridad real la da el RLS.
+[build.environment]
+  VITE_SUPABASE_URL = "https://pbieredtatoqkiuzmvuv.supabase.co"
+  VITE_SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBiaWVyZWR0YXRvcWtpdXptdnV2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE0NTAzNDUsImV4cCI6MjA5NzAyNjM0NX0.MexGsbPrDIAZOgcxoZvWJp3N4CNWRhfXK0FAl7zW678"
+  NODE_VERSION = "20"
+
+# React Router (SPA): cualquier ruta sirve index.html
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
