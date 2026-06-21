@@ -24,9 +24,22 @@ const ok = (body: any) => ({ ok: true, status: 200, json: async () => body });
 const fail = (status: number, error: string) => ({ ok: false, status, json: async () => ({ error }) });
 
 async function getAll(table: string) {
-  const { data, error } = await supabase.from(table).select('*').order('id', { ascending: false });
+  // Ignora registros con borrado lógico (deleted_at).
+  const { data, error } = await supabase.from(table).select('*').is('deleted_at', null).order('id', { ascending: false });
   if (error) throw error;
   return data || [];
+}
+
+// Resuelve el id de un cliente/lead a partir del nombre de empresa (exacto).
+async function clientIdByName(name: string): Promise<number | null> {
+  if (!name) return null;
+  const { data } = await supabase.from('clients').select('id').is('deleted_at', null).eq('empresa', name).limit(1);
+  return data?.[0]?.id ?? null;
+}
+async function leadIdByName(name: string): Promise<number | null> {
+  if (!name) return null;
+  const { data } = await supabase.from('leads').select('id').is('deleted_at', null).eq('empresa', name).limit(1);
+  return data?.[0]?.id ?? null;
 }
 
 // ---- Agregados (antes endpoints del backend) ----
@@ -149,10 +162,10 @@ async function weeklyReport() {
 
 async function company(name: string) {
   const [leads, clients, interactions, payments] = await Promise.all([
-    supabase.from('leads').select('*').eq('empresa', name),
-    supabase.from('clients').select('*').eq('empresa', name),
-    supabase.from('interactions').select('*').eq('empresa', name).order('fecha', { ascending: false }),
-    supabase.from('payments').select('*').eq('cliente', name).order('fecha', { ascending: false }),
+    supabase.from('leads').select('*').is('deleted_at', null).eq('empresa', name),
+    supabase.from('clients').select('*').is('deleted_at', null).eq('empresa', name),
+    supabase.from('interactions').select('*').is('deleted_at', null).eq('empresa', name).order('fecha', { ascending: false }),
+    supabase.from('payments').select('*').is('deleted_at', null).eq('cliente', name).order('fecha', { ascending: false }),
   ]);
   return { leads: leads.data || [], clients: clients.data || [], interactions: interactions.data || [], payments: payments.data || [] };
 }
@@ -223,6 +236,12 @@ export async function api(path: string, options: any = {}): Promise<any> {
       if (method === 'GET') return ok(await getAll(resource));
 
       if (method === 'POST') {
+        // Enlazar por id además del nombre (integridad referencial).
+        if (resource === 'payments' && body?.cliente) body.client_id = await clientIdByName(body.cliente);
+        if (resource === 'interactions' && body?.empresa) {
+          body.client_id = await clientIdByName(body.empresa);
+          body.lead_id = await leadIdByName(body.empresa);
+        }
         const { data, error } = await supabase.from(resource).insert(body).select('id').single();
         if (error) return fail(500, error.message);
         // Al registrar interacción, actualizar último contacto de lead/cliente (igual que el backend)
@@ -234,6 +253,14 @@ export async function api(path: string, options: any = {}): Promise<any> {
       }
 
       if (method === 'PATCH') {
+        // Mantener client_id sincronizado si cambia el nombre vinculado.
+        if (resource === 'payments' && body?.cliente) body.client_id = await clientIdByName(body.cliente);
+        // Al renombrar un cliente, propagar el nuevo nombre a sus pagos e interacciones
+        // (así el historial enlazado por id NO se rompe y los nombres quedan coherentes).
+        if (resource === 'clients' && body?.empresa) {
+          await supabase.from('payments').update({ cliente: body.empresa }).eq('client_id', idOrSub);
+          await supabase.from('interactions').update({ empresa: body.empresa }).eq('client_id', idOrSub);
+        }
         const { error } = await supabase.from(resource).update(body).eq('id', idOrSub);
         if (error) return fail(500, error.message);
         return ok({ success: true });
@@ -244,7 +271,8 @@ export async function api(path: string, options: any = {}): Promise<any> {
         if (resource === 'affiliates') {
           await supabase.from('payments').update({ afiliado_id: null, comision_pct: null, comision_estado: null }).eq('afiliado_id', idOrSub);
         }
-        const { error } = await supabase.from(resource).delete().eq('id', idOrSub);
+        // Borrado LÓGICO (soft-delete): se marca deleted_at en vez de eliminar la fila.
+        const { error } = await supabase.from(resource).update({ deleted_at: new Date().toISOString() }).eq('id', idOrSub);
         if (error) return fail(500, error.message);
         return ok({ success: true });
       }

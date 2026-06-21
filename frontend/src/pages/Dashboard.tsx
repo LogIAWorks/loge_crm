@@ -191,8 +191,8 @@ const Dashboard = () => {
             return (
               <div className="flex-1 flex flex-col justify-center">
                 <p className="text-[11px] font-black uppercase tracking-widest text-emerald-500 mb-1 capitalize">{mesActual} {new Date().getFullYear()}</p>
-                <p className="text-5xl font-black text-gray-900 leading-none">{eur(current.total || 0)}</p>
-                <div className={`mt-5 inline-flex items-center gap-2 text-sm font-bold ${up ? 'text-emerald-600' : 'text-red-500'}`}>
+                <p className="text-3xl font-black text-gray-900 leading-none">{eur(current.total || 0)}</p>
+                <div className={`mt-4 inline-flex items-center gap-2 text-sm font-bold ${up ? 'text-emerald-600' : 'text-red-500'}`}>
                   {up ? <TrendingUp className="w-4 h-4" /> : <TrendingDown className="w-4 h-4" />}
                   <span>{up ? '+' : '−'}{eur(Math.abs(diff))}{pct != null ? ` (${up ? '+' : '−'}${Math.abs(pct)}%)` : ''}</span>
                   <span className="text-gray-400 font-medium">vs mes anterior</span>
@@ -258,6 +258,21 @@ const Dashboard = () => {
               </div>
             )}
           </div>
+        </div>
+      </div>
+
+      {/* Embudo de ventas (formato tarjetas por etapa) */}
+      <div className="card p-6 border-none shadow-sm ring-1 ring-gray-100">
+        <h3 className="font-black text-gray-900 mb-5 flex items-center gap-2">
+          <Target className="w-4 h-4 text-blue-500" /> Embudo de ventas
+        </h3>
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+          {(data.pipelineFunnel || []).map((f: any, i: number) => (
+            <div key={i} className="rounded-2xl bg-gradient-to-b from-blue-50 to-white border border-blue-100/70 p-4 text-center">
+              <p className="text-2xl font-black text-blue-600 leading-none">{f.count}</p>
+              <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wide mt-2 leading-tight">{f.estado}</p>
+            </div>
+          ))}
         </div>
       </div>
 
