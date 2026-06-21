@@ -1,20 +1,30 @@
 import { useEffect, useState } from 'react';
-import { Target, Users, CreditCard, AlertTriangle, Calendar, FileText, CheckCircle2, X, Copy, Bot, BrainCircuit, Clock, Handshake } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { Target, Users, CreditCard, AlertTriangle, Calendar, FileText, CheckCircle2, X, Copy, Bot, BrainCircuit, Clock, Handshake, TrendingUp, TrendingDown } from 'lucide-react';
 import { api, authHeaders } from '../api';
 
 const Dashboard = () => {
+  const navigate = useNavigate();
   const [data, setData] = useState<any>(null);
-  const [alerts, setAlerts] = useState<any[]>([]);
   const [report, setReport] = useState<any>(null);
   const [showReport, setShowReport] = useState(false);
   const [showEkko, setShowEkko] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [ekkoProactive, setEkkoProactive] = useState(() => localStorage.getItem('ekko_proactive') !== 'off');
+
+  const toggleEkko = () => {
+    setEkkoProactive(prev => {
+      const next = !prev;
+      localStorage.setItem('ekko_proactive', next ? 'on' : 'off');
+      return next;
+    });
+  };
 
   useEffect(() => {
-    const h = authHeaders();
-    api('/api/dashboard', { headers: h }).then(r => r.json()).then(setData).catch(console.error);
-    api('/api/alerts', { headers: h }).then(r => r.json()).then(setAlerts).catch(console.error);
+    api('/api/dashboard', { headers: authHeaders() }).then(r => r.json()).then(setData).catch(console.error);
   }, []);
+
+  const alerts: any[] = Array.isArray(data?.alerts) ? data.alerts : [];
 
   const loadReport = async () => {
     const r = await api('/api/report/weekly', { headers: authHeaders() });
@@ -77,7 +87,7 @@ const Dashboard = () => {
       {(data.followUpsVencidos > 0 || data.pagosPendientesCount > 0 || data.clientesRevisionCount > 0 || data.comisionesPendientesTotal > 0) && (
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           {data.followUpsVencidos > 0 && (
-            <div className="bg-red-50 p-4 rounded-2xl border border-red-100 flex items-center gap-3">
+            <button onClick={() => navigate('/pipeline')} className="text-left bg-red-50 p-4 rounded-2xl border border-red-100 flex items-center gap-3 hover:border-red-300 hover:shadow-md transition-all active:scale-[0.98]">
               <div className="w-10 h-10 rounded-xl bg-red-500 flex items-center justify-center text-white flex-shrink-0">
                 <AlertTriangle className="w-5 h-5" />
               </div>
@@ -85,10 +95,10 @@ const Dashboard = () => {
                 <p className="text-[10px] text-red-500 font-black uppercase tracking-widest">Follow-ups vencidos</p>
                 <p className="text-xl font-black text-red-700">{data.followUpsVencidos}</p>
               </div>
-            </div>
+            </button>
           )}
           {data.pagosPendientesCount > 0 && (
-            <div className="bg-amber-50 p-4 rounded-2xl border border-amber-100 flex items-center gap-3">
+            <button onClick={() => navigate('/payments')} className="text-left bg-amber-50 p-4 rounded-2xl border border-amber-100 flex items-center gap-3 hover:border-amber-300 hover:shadow-md transition-all active:scale-[0.98]">
               <div className="w-10 h-10 rounded-xl bg-amber-500 flex items-center justify-center text-white flex-shrink-0">
                 <CreditCard className="w-5 h-5" />
               </div>
@@ -96,10 +106,10 @@ const Dashboard = () => {
                 <p className="text-[10px] text-amber-500 font-black uppercase tracking-widest">Pagos pendientes</p>
                 <p className="text-xl font-black text-amber-700">{data.pagosPendientesCount} · {eur(data.pagosPendientesTotal)}</p>
               </div>
-            </div>
+            </button>
           )}
           {data.clientesRevisionCount > 0 && (
-            <div className="bg-violet-50 p-4 rounded-2xl border border-violet-100 flex items-center gap-3">
+            <button onClick={() => navigate('/clients')} className="text-left bg-violet-50 p-4 rounded-2xl border border-violet-100 flex items-center gap-3 hover:border-violet-300 hover:shadow-md transition-all active:scale-[0.98]">
               <div className="w-10 h-10 rounded-xl bg-violet-500 flex items-center justify-center text-white flex-shrink-0">
                 <Calendar className="w-5 h-5" />
               </div>
@@ -107,10 +117,10 @@ const Dashboard = () => {
                 <p className="text-[10px] text-violet-500 font-black uppercase tracking-widest">Revisión requerida</p>
                 <p className="text-xl font-black text-violet-700">{data.clientesRevisionCount} clientes</p>
               </div>
-            </div>
+            </button>
           )}
           {data.comisionesPendientesTotal > 0 && (
-            <div className="bg-teal-50 p-4 rounded-2xl border border-teal-100 flex items-center gap-3">
+            <button onClick={() => navigate('/affiliates')} className="text-left bg-teal-50 p-4 rounded-2xl border border-teal-100 flex items-center gap-3 hover:border-teal-300 hover:shadow-md transition-all active:scale-[0.98]">
               <div className="w-10 h-10 rounded-xl bg-teal-500 flex items-center justify-center text-white flex-shrink-0">
                 <Handshake className="w-5 h-5" />
               </div>
@@ -118,7 +128,7 @@ const Dashboard = () => {
                 <p className="text-[10px] text-teal-500 font-black uppercase tracking-widest">Comisiones por pagar</p>
                 <p className="text-xl font-black text-teal-700">{eur(data.comisionesPendientesTotal)}</p>
               </div>
-            </div>
+            </button>
           )}
         </div>
       )}
@@ -126,19 +136,71 @@ const Dashboard = () => {
       {/* KPI Row */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {[
-          { label: 'Leads Activos', value: data.leadsActivos, icon: Target, color: 'text-blue-600', bg: 'bg-blue-50' },
-          { label: 'Clientes Activos', value: data.clientesActivos, icon: Users, color: 'text-violet-600', bg: 'bg-violet-50' },
-          { label: 'Cobrado (Mes)', value: eur(data.cobradoMes), icon: CheckCircle2, color: 'text-emerald-600', bg: 'bg-emerald-50' },
-          { label: 'Tareas Pendientes', value: data.tareasPendientesCount, icon: Clock, color: 'text-amber-600', bg: 'bg-amber-50' },
+          { label: 'Leads Activos', value: data.leadsActivos, icon: Target, color: 'text-blue-600', bg: 'bg-blue-50', to: '/pipeline' },
+          { label: 'Clientes Activos', value: data.clientesActivos, icon: Users, color: 'text-violet-600', bg: 'bg-violet-50', to: '/clients' },
+          { label: 'Cobrado (Mes)', value: eur(data.cobradoMes), icon: CheckCircle2, color: 'text-emerald-600', bg: 'bg-emerald-50', to: '/payments' },
+          { label: 'Tareas Pendientes', value: data.tareasPendientesCount, icon: Clock, color: 'text-amber-600', bg: 'bg-amber-50', to: '/tasks' },
         ].map((s, i) => (
-          <div key={i} className="card p-5 border-none shadow-sm ring-1 ring-gray-100">
+          <button key={i} onClick={() => navigate(s.to)} className="text-left card p-5 border-none shadow-sm ring-1 ring-gray-100 hover:ring-brand/40 hover:shadow-md transition-all active:scale-[0.98]">
             <div className={`w-9 h-9 rounded-lg flex items-center justify-center ${s.bg} mb-3`}>
               <s.icon className={`w-4 h-4 ${s.color}`} />
             </div>
             <p className="text-[10px] text-gray-400 font-black uppercase tracking-widest">{s.label}</p>
             <p className="text-xl font-black text-gray-900 mt-0.5">{s.value}</p>
-          </div>
+          </button>
         ))}
+      </div>
+
+      {/* Charts: Ingresos + Cobrado este mes */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Ingresos últimos 6 meses */}
+        <div className="card p-6 border-none shadow-sm ring-1 ring-gray-100">
+          <h3 className="font-black text-gray-900 mb-5 flex items-center gap-2">
+            <CheckCircle2 className="w-4 h-4 text-emerald-500" /> Ingresos cobrados (6 meses)
+          </h3>
+          {(() => {
+            const series = data.revenueByMonth || [];
+            const max = Math.max(1, ...series.map((m: any) => m.total));
+            return (
+              <div className="flex items-end justify-between gap-3 h-44 pt-4">
+                {series.map((m: any, i: number) => (
+                  <div key={i} className="flex-1 flex flex-col items-center gap-2 h-full justify-end">
+                    <span className="text-[10px] font-black text-gray-600">{m.total > 0 ? eur(m.total) : ''}</span>
+                    <div className="w-full bg-gradient-to-t from-brand to-brand-light rounded-t-lg transition-all" style={{ height: `${Math.max(2, (m.total / max) * 100)}%` }} title={eur(m.total)} />
+                    <span className="text-[10px] font-bold text-gray-400 uppercase">{m.label}</span>
+                  </div>
+                ))}
+              </div>
+            );
+          })()}
+        </div>
+
+        {/* Cobrado este mes */}
+        <div className="card p-6 border-none shadow-sm ring-1 ring-gray-100 flex flex-col">
+          <h3 className="font-black text-gray-900 mb-5 flex items-center gap-2">
+            <CheckCircle2 className="w-4 h-4 text-emerald-500" /> Cobrado este mes
+          </h3>
+          {(() => {
+            const series = data.revenueByMonth || [];
+            const current = series[series.length - 1] || { total: 0 };
+            const prev = series[series.length - 2] || { total: 0 };
+            const diff = (current.total || 0) - (prev.total || 0);
+            const pct = prev.total > 0 ? Math.round((diff / prev.total) * 100) : null;
+            const mesActual = new Date().toLocaleDateString('es-ES', { month: 'long' });
+            const up = diff >= 0;
+            return (
+              <div className="flex-1 flex flex-col justify-center">
+                <p className="text-[11px] font-black uppercase tracking-widest text-emerald-500 mb-1 capitalize">{mesActual} {new Date().getFullYear()}</p>
+                <p className="text-5xl font-black text-gray-900 leading-none">{eur(current.total || 0)}</p>
+                <div className={`mt-5 inline-flex items-center gap-2 text-sm font-bold ${up ? 'text-emerald-600' : 'text-red-500'}`}>
+                  {up ? <TrendingUp className="w-4 h-4" /> : <TrendingDown className="w-4 h-4" />}
+                  <span>{up ? '+' : '−'}{eur(Math.abs(diff))}{pct != null ? ` (${up ? '+' : '−'}${Math.abs(pct)}%)` : ''}</span>
+                  <span className="text-gray-400 font-medium">vs mes anterior</span>
+                </div>
+              </div>
+            );
+          })()}
+        </div>
       </div>
 
       {/* Main Content: Alerts + Tasks side by side */}
@@ -260,7 +322,15 @@ const Dashboard = () => {
             <div className="p-4 bg-gray-50 rounded-2xl border border-gray-100 flex items-center gap-3 text-left mb-4">
               <BrainCircuit className="w-5 h-5 text-brand flex-shrink-0" />
               <div><p className="text-sm font-bold text-gray-900">Modo Proactivo</p><p className="text-[10px] text-gray-400">Reportes diarios a las 9:00</p></div>
-              <div className="w-9 h-5 bg-brand rounded-full relative ml-auto"><div className="absolute right-0.5 top-0.5 w-4 h-4 bg-white rounded-full shadow-sm"></div></div>
+              <button
+                type="button"
+                onClick={toggleEkko}
+                role="switch"
+                aria-checked={ekkoProactive}
+                className={`w-9 h-5 rounded-full relative ml-auto transition-colors ${ekkoProactive ? 'bg-brand' : 'bg-gray-300'}`}
+              >
+                <div className={`absolute top-0.5 w-4 h-4 bg-white rounded-full shadow-sm transition-all ${ekkoProactive ? 'right-0.5' : 'left-0.5'}`}></div>
+              </button>
             </div>
             <button onClick={() => setShowEkko(false)} className="w-full btn-primary !py-3 rounded-2xl font-bold">Cerrar</button>
           </div>

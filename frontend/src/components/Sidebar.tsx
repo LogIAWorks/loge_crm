@@ -1,5 +1,5 @@
 import { NavLink, useLocation } from 'react-router-dom';
-import { LayoutDashboard, Users, MessageSquare, CreditCard, Settings, Target, CheckSquare, Handshake, LogOut } from 'lucide-react';
+import { LayoutDashboard, Users, MessageSquare, CreditCard, Settings, Target, CheckSquare, Handshake, LogOut, CalendarDays } from 'lucide-react';
 import { useAuth } from '../auth';
 
 const navItems = [
@@ -7,20 +7,32 @@ const navItems = [
   { name: 'Pipeline', path: '/pipeline', icon: Target },
   { name: 'Clientes', path: '/clients', icon: Users },
   { name: 'Tareas', path: '/tasks', icon: CheckSquare },
+  { name: 'Calendario', path: '/calendar', icon: CalendarDays },
   { name: 'Interacciones', path: '/interactions', icon: MessageSquare },
   { name: 'Pagos', path: '/payments', icon: CreditCard },
   { name: 'Afiliados', path: '/affiliates', icon: Handshake },
   { name: 'Ajustes', path: '/settings', icon: Settings },
 ];
 
-const Sidebar = () => {
+interface SidebarProps {
+  open?: boolean;
+  onClose?: () => void;
+}
+
+const Sidebar = ({ open = false, onClose }: SidebarProps) => {
   const location = useLocation();
   const { session, signOut } = useAuth();
   const username = (session?.user?.email || '').split('@')[0] || 'usuario';
   const initials = username.slice(0, 2).toUpperCase();
 
   return (
-    <div className="w-[260px] bg-white border-r border-gray-100 h-full flex flex-col flex-shrink-0 z-20">
+    <>
+    {/* Backdrop (solo móvil, cuando el drawer está abierto) */}
+    <div
+      className={`fixed inset-0 bg-black/40 backdrop-blur-sm z-30 lg:hidden transition-opacity duration-200 ${open ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
+      onClick={onClose}
+    />
+    <div className={`fixed inset-y-0 left-0 w-[260px] bg-white border-r border-gray-100 h-full flex flex-col flex-shrink-0 z-40 transform transition-transform duration-300 lg:static lg:translate-x-0 ${open ? 'translate-x-0' : '-translate-x-full'}`}>
       {/* Logo */}
       <div className="px-6 pt-10 pb-6 flex flex-col items-center text-center">
         <img src="/logo.png" alt="LOGE" className="h-[76px] w-auto max-w-full object-contain mb-4" />
@@ -41,6 +53,7 @@ const Sidebar = () => {
             <NavLink
               key={item.name}
               to={item.path}
+              onClick={onClose}
               className={`flex items-center gap-3 px-4 py-2.5 rounded-xl transition-all duration-200 group relative ${
                 isActive
                   ? 'bg-brand/10 text-brand font-semibold'
@@ -77,6 +90,7 @@ const Sidebar = () => {
         </div>
       </div>
     </div>
+    </>
   );
 };
 

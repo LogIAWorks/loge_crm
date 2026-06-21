@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import { Plus, Search, Phone, MessageSquare, Users, Trash2, X, Clock, Zap, CheckCircle2 } from 'lucide-react';
 import { api, authHeaders } from '../api';
+import { toast } from '../components/toast';
+import { useEscapeKey } from '../utils/useEscapeKey';
 
 const val = (obj: any, ...keys: string[]) => {
   for (const k of keys) { if (obj[k] != null && obj[k] !== '') return obj[k]; }
@@ -23,8 +25,10 @@ const Interactions = () => {
   const [deleteId, setDeleteId] = useState<number | null>(null);
 
   const h = authHeaders();
-  const fetchInteractions = () => api('/api/interactions', { headers: h }).then(r => r.json()).then(setInteractions);
+  const fetchInteractions = () => api('/api/interactions', { headers: h }).then(r => r.json()).then(d => setInteractions(Array.isArray(d) ? d : [])).catch(() => toast.error('No se pudieron cargar las interacciones'));
   useEffect(() => { fetchInteractions(); }, []);
+  useEscapeKey(showModal, () => setShowModal(false));
+  useEscapeKey(deleteId != null, () => setDeleteId(null));
 
   const openEdit = (item: any) => {
     setFormData({
@@ -51,7 +55,8 @@ const Interactions = () => {
     api(url, { method, headers: { ...h, 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
       .then(async r => {
         const data = await r.json().catch(() => ({}));
-        if (!r.ok) { alert('Error: ' + (data.error || r.status)); return; }
+        if (!r.ok) { toast.error('Error: ' + (data.error || r.status)); return; }
+        toast.success(formData.id ? 'Actividad actualizada' : 'Actividad registrada');
         setShowModal(false); fetchInteractions();
       });
   };
@@ -122,13 +127,13 @@ const Interactions = () => {
       {showModal && (
         <div className="fixed inset-0 z-50 overflow-y-auto bg-black/40 backdrop-blur-sm" onClick={() => setShowModal(false)}>
           <div className="flex min-h-full items-center justify-center p-4 py-8">
-            <div className="bg-white rounded-3xl w-full max-w-lg shadow-modal overflow-hidden animate-slide-up flex flex-col max-h-[90vh]" onClick={e => e.stopPropagation()}>
+            <div className="bg-white rounded-3xl w-full max-w-2xl shadow-modal overflow-hidden animate-slide-up flex flex-col max-h-[90vh]" onClick={e => e.stopPropagation()}>
               <form onSubmit={handleSubmit} className="flex flex-col min-h-0 flex-1">
-                <div className="px-8 py-5 border-b border-gray-100 flex items-center justify-between bg-gray-50/50 shrink-0">
+                <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between bg-gray-50/50 shrink-0">
                   <h3 className="text-lg font-black text-gray-900">{formData.id ? 'Editar Actividad' : 'Registrar Actividad'}</h3>
                   <button type="button" onClick={() => setShowModal(false)} className="p-2 rounded-xl hover:bg-gray-100 text-gray-400"><X className="w-5 h-5" /></button>
                 </div>
-                <div className="p-8 space-y-5 overflow-y-auto flex-1">
+                <div className="p-6 space-y-4 overflow-y-auto flex-1">
                   <div className="grid grid-cols-2 gap-4">
                     <div>
                       <label className="text-[10px] font-black text-brand uppercase tracking-widest mb-1 block">Fecha *</label>
@@ -158,7 +163,7 @@ const Interactions = () => {
                     <textarea rows={2} className="input !bg-gray-50/50" value={formData.detalle || ''} onChange={e => setFormData({...formData, detalle: e.target.value})} />
                   </div>
                 </div>
-                <div className="px-8 py-5 border-t border-gray-100 bg-gray-50/50 flex justify-end gap-3 shrink-0">
+                <div className="px-6 py-4 border-t border-gray-100 bg-gray-50/50 flex justify-end gap-3 shrink-0">
                   <button type="button" onClick={() => setShowModal(false)} className="px-5 py-2.5 text-sm font-bold text-gray-500">Cancelar</button>
                   <button type="submit" className="btn-primary !py-2.5 px-8 rounded-2xl font-bold text-xs uppercase tracking-wider">Guardar</button>
                 </div>
@@ -177,7 +182,7 @@ const Interactions = () => {
               <p className="text-sm text-gray-500 mb-6">Esta acción no se puede deshacer.</p>
               <div className="flex gap-3">
                 <button onClick={() => setDeleteId(null)} className="flex-1 py-2.5 text-sm font-bold text-gray-500 hover:bg-gray-100 rounded-2xl">Cancelar</button>
-                <button onClick={() => { api(`/api/interactions/${deleteId}`, { method: 'DELETE', headers: h }).then(() => { setDeleteId(null); fetchInteractions(); }); }} className="flex-1 bg-red-500 text-white font-bold py-2.5 rounded-2xl text-xs uppercase">Eliminar</button>
+                <button onClick={() => { api(`/api/interactions/${deleteId}`, { method: 'DELETE', headers: h }).then(() => { setDeleteId(null); fetchInteractions(); toast.success('Actividad eliminada'); }); }} className="flex-1 bg-red-500 text-white font-bold py-2.5 rounded-2xl text-xs uppercase">Eliminar</button>
               </div>
             </div>
           </div>

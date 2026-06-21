@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import { Plus, Search, Edit2, Trash2, X, Handshake, Users as UsersIcon, Percent, Wallet, CheckCircle2, Clock, Phone, Mail } from 'lucide-react';
 import { api, authHeaders, jsonHeaders } from '../api';
+import { toast } from '../components/toast';
+import { useEscapeKey } from '../utils/useEscapeKey';
 
 const TIPOS = ['Comercial', 'Partner técnico', 'Referido', 'Agencia', 'Otro'];
 
@@ -14,8 +16,12 @@ const Affiliates = () => {
   const [deleteId, setDeleteId] = useState<number | null>(null);
 
   const h = authHeaders();
-  const fetchData = () => api('/api/affiliates/summary', { headers: h }).then(r => r.json()).then(setData);
+  const fetchData = () => api('/api/affiliates/summary', { headers: h }).then(r => r.json())
+    .then(d => setData(d && Array.isArray(d.affiliates) ? d : { affiliates: [], commissions: [], totals: {} }))
+    .catch(() => toast.error('No se pudieron cargar los colaboradores'));
   useEffect(() => { fetchData(); }, []);
+  useEscapeKey(showModal, () => setShowModal(false));
+  useEscapeKey(deleteId != null, () => setDeleteId(null));
 
   const openNew = () => { setFormData({ tipo: 'Comercial', comision_pct: 10 }); setShowModal(true); };
   const openEdit = (a: any) => { setFormData({ ...a }); setShowModal(true); };
@@ -37,7 +43,8 @@ const Affiliates = () => {
     api(url, { method, headers: jsonHeaders(), body: JSON.stringify(body) })
       .then(async r => {
         const resp = await r.json().catch(() => ({}));
-        if (!r.ok) { alert('Error al guardar: ' + (resp.error || r.status)); return; }
+        if (!r.ok) { toast.error('Error al guardar: ' + (resp.error || r.status)); return; }
+        toast.success(formData.id ? 'Colaborador actualizado' : 'Colaborador creado');
         setShowModal(false); fetchData();
       });
   };
@@ -91,8 +98,8 @@ const Affiliates = () => {
       </div>
 
       {/* Tabla de colaboradores */}
-      <div className="card overflow-hidden border-none shadow-sm ring-1 ring-gray-100">
-        <table className="w-full text-left">
+      <div className="card overflow-x-auto border-none shadow-sm ring-1 ring-gray-100">
+        <table className="w-full text-left min-w-[820px]">
           <thead>
             <tr className="bg-gray-50 border-b border-gray-100">
               <th className="px-6 py-3 text-[10px] font-black uppercase text-gray-400">Colaborador</th>
@@ -178,14 +185,14 @@ const Affiliates = () => {
       {showModal && (
         <div className="fixed inset-0 z-50 overflow-y-auto bg-black/40 backdrop-blur-sm" onClick={() => setShowModal(false)}>
           <div className="flex min-h-full items-center justify-center p-4 py-8">
-            <div className="bg-white rounded-3xl w-full max-w-lg shadow-modal overflow-hidden animate-slide-up flex flex-col max-h-[90vh]" onClick={e => e.stopPropagation()}>
+            <div className="bg-white rounded-3xl w-full max-w-2xl shadow-modal overflow-hidden animate-slide-up flex flex-col max-h-[90vh]" onClick={e => e.stopPropagation()}>
               <form onSubmit={handleSubmit} className="flex flex-col min-h-0 flex-1">
-                <div className="px-8 py-5 border-b border-gray-100 flex items-center justify-between bg-gray-50/50 shrink-0">
+                <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between bg-gray-50/50 shrink-0">
                   <h3 className="text-lg font-black text-gray-900">{formData.id ? 'Ficha de Colaborador' : 'Nuevo Colaborador'}</h3>
                   <button type="button" onClick={() => setShowModal(false)} className="p-2 rounded-xl hover:bg-gray-100 text-gray-400"><X className="w-5 h-5" /></button>
                 </div>
-                <div className="p-8 overflow-y-auto flex-1">
-                  <div className="grid grid-cols-2 gap-5">
+                <div className="p-6 overflow-y-auto flex-1">
+                  <div className="grid grid-cols-2 gap-4">
                     <div className="col-span-2">
                       <label className="text-[10px] font-black text-brand uppercase tracking-widest mb-1 block">Nombre *</label>
                       <input required className="input font-bold" value={formData.nombre || ''} onChange={e => setFormData({...formData, nombre: e.target.value})} />
@@ -206,11 +213,11 @@ const Affiliates = () => {
                     </div>
                     <div>
                       <label className="text-[10px] font-black text-brand uppercase tracking-widest mb-1 block">Email</label>
-                      <input className="input" value={formData.email || ''} onChange={e => setFormData({...formData, email: e.target.value})} />
+                      <input type="email" className="input" value={formData.email || ''} onChange={e => setFormData({...formData, email: e.target.value})} />
                     </div>
                   </div>
-                  <div className="pt-6 mt-6 border-t border-gray-100">
-                    <p className="text-[10px] font-black text-gray-300 uppercase tracking-widest mb-4">Datos de pago / fiscales</p>
+                  <div className="pt-5 mt-5 border-t border-gray-100">
+                    <p className="text-[10px] font-black text-gray-300 uppercase tracking-widest mb-3">Datos de pago / fiscales</p>
                     <div className="grid grid-cols-2 gap-4">
                       <div>
                         <label className="text-[10px] font-bold text-gray-400 uppercase mb-1 block">IBAN</label>
@@ -227,7 +234,7 @@ const Affiliates = () => {
                     </div>
                   </div>
                 </div>
-                <div className="px-8 py-5 border-t border-gray-100 bg-gray-50/50 flex justify-end gap-3 shrink-0">
+                <div className="px-6 py-4 border-t border-gray-100 bg-gray-50/50 flex justify-end gap-3 shrink-0">
                   <button type="button" onClick={() => setShowModal(false)} className="px-5 py-2.5 text-sm font-bold text-gray-500">Cancelar</button>
                   <button type="submit" className="btn-primary !py-2.5 px-8 rounded-2xl font-bold text-xs uppercase tracking-wider">Guardar</button>
                 </div>
@@ -247,7 +254,7 @@ const Affiliates = () => {
               <p className="text-sm text-gray-500 mb-6">Las comisiones asignadas en sus cobros se desvincularán. Esta acción no se puede deshacer.</p>
               <div className="flex gap-3">
                 <button onClick={() => setDeleteId(null)} className="flex-1 py-2.5 text-sm font-bold text-gray-500 hover:bg-gray-100 rounded-2xl">Cancelar</button>
-                <button onClick={() => { api(`/api/affiliates/${deleteId}`, { method: 'DELETE', headers: h }).then(() => { setDeleteId(null); fetchData(); }); }} className="flex-1 bg-red-500 text-white font-bold py-2.5 rounded-2xl text-xs uppercase">Eliminar</button>
+                <button onClick={() => { api(`/api/affiliates/${deleteId}`, { method: 'DELETE', headers: h }).then(() => { setDeleteId(null); fetchData(); toast.success('Colaborador eliminado'); }); }} className="flex-1 bg-red-500 text-white font-bold py-2.5 rounded-2xl text-xs uppercase">Eliminar</button>
               </div>
             </div>
           </div>

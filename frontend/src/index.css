@@ -79,7 +79,16 @@
   .badge-gray { @apply bg-gray-100 text-gray-600 ring-1 ring-gray-200; }
 
   /* Page animations */
+  /* Solo opacidad: NO usar transform aquí. Un transform persistente en este
+     contenedor convierte a .page-enter en el "containing block" de cualquier
+     position:fixed descendiente (los modales), descolocándolos respecto a la
+     ventana. Ver bug del overlay desplazado/cortado. */
   .page-enter {
-    animation: fadeIn 0.4s ease-out forwards;
+    animation: pageEnter 0.35s ease-out;
   }
+}
+
+@keyframes pageEnter {
+  from { opacity: 0; }
+  to { opacity: 1; }
 }

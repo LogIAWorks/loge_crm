@@ -2,29 +2,46 @@ import { useEffect, useState } from 'react';
 import { Save, Key, Shield, CheckCircle2, Bot, Zap } from 'lucide-react';
 import { api, authHeaders, jsonHeaders } from '../api';
 
+const SECRET_KEYS = ['claude_api_key', 'openclaw_token', 'crm_api_key'];
+
 const Settings = () => {
-  const [settings, setSettings] = useState<any>({});
+  // `configured` guarda solo si cada secreto existe (no su valor).
+  const [configured, setConfigured] = useState<Record<string, boolean>>({});
+  // `inputs` son valores NUEVOS que el usuario escribe; vacío = no tocar.
+  const [inputs, setInputs] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
 
   useEffect(() => {
     api('/api/settings', { headers: authHeaders() })
       .then(res => res.json())
-      .then(setSettings);
+      .then((data: any) => {
+        const conf: Record<string, boolean> = {};
+        SECRET_KEYS.forEach(k => { conf[k] = !!data[k]; });
+        setConfigured(conf);
+      });
   }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setSaving(true);
-    await api('/api/settings', {
-      method: 'PUT',
-      headers: jsonHeaders(),
-      body: JSON.stringify(settings)
-    });
+    // Solo enviamos las claves que el usuario ha rellenado (no se pisa con vacío).
+    const payload: Record<string, string> = {};
+    SECRET_KEYS.forEach(k => { if (inputs[k]?.trim()) payload[k] = inputs[k].trim(); });
+    if (Object.keys(payload).length > 0) {
+      await api('/api/settings', { method: 'PUT', headers: jsonHeaders(), body: JSON.stringify(payload) });
+      const conf = { ...configured };
+      Object.keys(payload).forEach(k => { conf[k] = true; });
+      setConfigured(conf);
+      setInputs({});
+    }
     setSaving(false);
     setSaved(true);
     setTimeout(() => setSaved(false), 3000);
   };
+
+  const placeholder = (k: string, fallback: string) =>
+    configured[k] ? '•••••••••••• (configurado — escribe para cambiar)' : fallback;
 
   return (
     <div className="space-y-8 page-enter max-w-3xl">
@@ -47,8 +64,8 @@ const Settings = () => {
               <h3 className="text-base font-bold text-gray-900">Claude API (Anthropic)</h3>
               <p className="text-sm text-gray-400 mt-0.5">Permite que el asistente IA consulte y actualice el CRM directamente a través de la API REST.</p>
             </div>
-            <div className={`px-2 py-1 rounded-md text-[11px] font-semibold ${settings.claude_api_key ? 'bg-emerald-50 text-emerald-600' : 'bg-gray-100 text-gray-400'}`}>
-              {settings.claude_api_key ? 'Configurado' : 'Sin configurar'}
+            <div className={`px-2 py-1 rounded-md text-[11px] font-semibold ${configured.claude_api_key ? 'bg-emerald-50 text-emerald-600' : 'bg-gray-100 text-gray-400'}`}>
+              {configured.claude_api_key ? 'Configurado' : 'Sin configurar'}
             </div>
           </div>
           <div>
@@ -57,12 +74,13 @@ const Settings = () => {
               <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
                 <Key className="w-4 h-4 text-gray-400" />
               </div>
-              <input 
+              <input
                 type="password"
-                className="input pl-10 font-mono text-sm" 
-                value={settings.claude_api_key || ''} 
-                onChange={e => setSettings({...settings, claude_api_key: e.target.value})} 
-                placeholder="sk-ant-api03-..." 
+                autoComplete="new-password"
+                className="input pl-10 font-mono text-sm"
+                value={inputs.claude_api_key || ''}
+                onChange={e => setInputs({...inputs, claude_api_key: e.target.value})}
+                placeholder={placeholder('claude_api_key', 'sk-ant-api03-...')}
               />
             </div>
           </div>
@@ -80,8 +98,8 @@ const Settings = () => {
                 Conecta con el bot de Telegram. URL base: <code className="bg-gray-100 px-1.5 py-0.5 rounded text-xs font-mono text-brand">http://localhost:18789</code>
               </p>
             </div>
-            <div className={`px-2 py-1 rounded-md text-[11px] font-semibold ${settings.openclaw_token ? 'bg-emerald-50 text-emerald-600' : 'bg-gray-100 text-gray-400'}`}>
-              {settings.openclaw_token ? 'Configurado' : 'Sin configurar'}
+            <div className={`px-2 py-1 rounded-md text-[11px] font-semibold ${configured.openclaw_token ? 'bg-emerald-50 text-emerald-600' : 'bg-gray-100 text-gray-400'}`}>
+              {configured.openclaw_token ? 'Configurado' : 'Sin configurar'}
             </div>
           </div>
           <div>
@@ -90,12 +108,13 @@ const Settings = () => {
               <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
                 <Key className="w-4 h-4 text-gray-400" />
               </div>
-              <input 
+              <input
                 type="password"
-                className="input pl-10 font-mono text-sm" 
-                value={settings.openclaw_token || ''} 
-                onChange={e => setSettings({...settings, openclaw_token: e.target.value})} 
-                placeholder="Token de autenticación..." 
+                autoComplete="new-password"
+                className="input pl-10 font-mono text-sm"
+                value={inputs.openclaw_token || ''}
+                onChange={e => setInputs({...inputs, openclaw_token: e.target.value})}
+                placeholder={placeholder('openclaw_token', 'Token de autenticación...')}
               />
             </div>
           </div>
@@ -120,11 +139,13 @@ const Settings = () => {
               <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
                 <Key className="w-4 h-4 text-gray-400" />
               </div>
-              <input 
-                type="text"
-                className="input pl-10 font-mono text-sm" 
-                value={settings.crm_api_key || ''} 
-                onChange={e => setSettings({...settings, crm_api_key: e.target.value})} 
+              <input
+                type="password"
+                autoComplete="new-password"
+                className="input pl-10 font-mono text-sm"
+                value={inputs.crm_api_key || ''}
+                onChange={e => setInputs({...inputs, crm_api_key: e.target.value})}
+                placeholder={placeholder('crm_api_key', 'Token interno...')}
               />
             </div>
             <p className="text-xs text-gray-400 mt-2">

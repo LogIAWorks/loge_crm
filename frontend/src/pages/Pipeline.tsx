@@ -2,8 +2,10 @@ import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { DndContext, DragOverlay, PointerSensor, useSensor, useSensors, useDroppable, useDraggable, closestCenter } from '@dnd-kit/core';
 import type { DragEndEvent, DragStartEvent } from '@dnd-kit/core';
-import { Plus, Search, AlertTriangle, List, LayoutGrid, X, Trash2, Edit2, Eye } from 'lucide-react';
+import { Plus, Search, AlertTriangle, List, LayoutGrid, X, Trash2, Edit2, Eye, UserCheck } from 'lucide-react';
 import { api, authHeaders, jsonHeaders } from '../api';
+import { toast } from '../components/toast';
+import { useEscapeKey } from '../utils/useEscapeKey';
 import Company360Modal from '../components/Company360Modal';
 
 const val = (obj: any, ...keys: string[]) => {
@@ -112,10 +114,15 @@ const Pipeline = () => {
   const [activeId, setActiveId] = useState<number | null>(null);
   const [overColumn, setOverColumn] = useState<string | null>(null);
   const [view360, setView360] = useState<string | null>(null);
+  const [confirmConvert, setConfirmConvert] = useState(false);
+  const [converting, setConverting] = useState(false);
 
   const h = authHeaders();
-  const fetchLeads = () => api('/api/leads', { headers: h }).then(r => r.json()).then(setLeads);
+  const fetchLeads = () => api('/api/leads', { headers: h }).then(r => r.json()).then(d => setLeads(Array.isArray(d) ? d : [])).catch(() => toast.error('No se pudieron cargar los leads'));
   useEffect(() => { fetchLeads(); }, []);
+  useEscapeKey(showModal, () => setShowModal(false));
+  useEscapeKey(deleteId != null, () => setDeleteId(null));
+  useEscapeKey(view360 != null, () => setView360(null));
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } })
@@ -129,6 +136,7 @@ const Pipeline = () => {
       nota_corta: val(l, 'nota_corta', 'proxima_accion') || '',
       valor_estimado: val(l, 'valor_estimado') || '',
     });
+    setConfirmConvert(false);
     setShowModal(true);
   };
 
@@ -153,9 +161,44 @@ const Pipeline = () => {
     api(url, { method, headers: jsonHeaders(), body: JSON.stringify(body) })
       .then(async r => {
         const data = await r.json().catch(() => ({}));
-        if (!r.ok) { alert('Error: ' + (data.error || r.status)); return; }
+        if (!r.ok) { toast.error('Error: ' + (data.error || r.status)); return; }
+        toast.success(formData.id ? 'Lead actualizado' : 'Lead creado');
         setShowModal(false); fetchLeads();
       });
+  };
+
+  // Convierte el lead actual del formulario en un cliente y marca el lead como Cerrado.
+  const doConvert = async () => {
+    if (!formData.id || converting) return;
+    setConverting(true);
+    // Evitar duplicados: si ya existe un cliente con ese nombre, abortar.
+    try {
+      const cr = await api('/api/clients', { headers: h });
+      const clients = await cr.json();
+      const dup = Array.isArray(clients) && clients.some((c: any) => (c.empresa || '').trim().toLowerCase() === (formData.empresa || '').trim().toLowerCase());
+      if (dup) { toast.error('Ya existe un cliente con ese nombre'); setConverting(false); setConfirmConvert(false); return; }
+    } catch { /* si falla la comprobación, continuamos */ }
+    const en30dias = (() => { const d = new Date(); d.setDate(d.getDate() + 30); return d.toISOString().split('T')[0]; })();
+    const clientBody = {
+      empresa: formData.empresa,
+      contacto: formData.contacto || null,
+      servicio_contratado: val(formData, 'interes_principal', 'servicio_interesado') || 'Por definir',
+      valor: formData.valor_estimado ? Number(formData.valor_estimado) : null,
+      estado_cliente: 'Onboarding',
+      estado_pago: 'Pendiente',
+      proxima_revision: en30dias,
+      notas: val(formData, 'nota_corta', 'proxima_accion') || 'Convertido desde lead',
+      proximo_paso: val(formData, 'nota_corta', 'proxima_accion') || 'Onboarding inicial',
+      telefono: formData.telefono || null,
+      email: formData.email || null,
+    };
+    const r = await api('/api/clients', { method: 'POST', headers: jsonHeaders(), body: JSON.stringify(clientBody) });
+    const data = await r.json().catch(() => ({}));
+    if (!r.ok) { toast.error('No se pudo convertir: ' + (data.error || r.status)); setConverting(false); return; }
+    await api(`/api/leads/${formData.id}`, { method: 'PATCH', headers: jsonHeaders(), body: JSON.stringify({ estado: 'Cerrado' }) });
+    toast.success(`${formData.empresa} convertido en cliente 🎉`);
+    setConverting(false); setConfirmConvert(false);
+    setShowModal(false); fetchLeads();
   };
 
   const handleDragStart = (e: DragStartEvent) => {
@@ -257,8 +300,8 @@ const Pipeline = () => {
         </DndContext>
       ) : (
         /* List view */
-        <div className="card overflow-hidden border-none shadow-sm ring-1 ring-gray-100">
-          <table className="w-full text-left">
+        <div className="card overflow-x-auto border-none shadow-sm ring-1 ring-gray-100">
+          <table className="w-full text-left min-w-[640px]">
             <thead>
               <tr className="bg-gray-50 border-b border-gray-100">
                 <th className="px-6 py-3 text-[10px] font-black uppercase text-gray-400">Lead</th>
@@ -304,14 +347,14 @@ const Pipeline = () => {
       {showModal && (
         <div className="fixed inset-0 z-50 overflow-y-auto bg-black/40 backdrop-blur-sm" onClick={() => setShowModal(false)}>
           <div className="flex min-h-full items-center justify-center p-4 py-8">
-          <div className="bg-white rounded-3xl w-full max-w-2xl shadow-modal overflow-hidden animate-slide-up flex flex-col max-h-[90vh]" onClick={e => e.stopPropagation()}>
+          <div className="bg-white rounded-3xl w-full max-w-3xl shadow-modal overflow-hidden animate-slide-up flex flex-col max-h-[90vh]" onClick={e => e.stopPropagation()}>
             <form onSubmit={handleSubmit} className="flex flex-col min-h-0 flex-1">
-              <div className="px-8 py-5 border-b border-gray-100 flex items-center justify-between bg-gray-50/50 shrink-0">
+              <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between bg-gray-50/50 shrink-0">
                 <h3 className="text-lg font-black text-gray-900">{formData.id ? 'Ficha de Lead' : 'Nuevo Lead'}</h3>
                 <button type="button" onClick={() => setShowModal(false)} className="p-2 rounded-xl hover:bg-gray-100 text-gray-400"><X className="w-5 h-5" /></button>
               </div>
-              <div className="p-8 overflow-y-auto custom-scrollbar flex-1">
-                <div className="grid grid-cols-2 gap-5 mb-8">
+              <div className="p-6 overflow-y-auto custom-scrollbar flex-1">
+                <div className="grid grid-cols-2 gap-4 mb-5">
                   <div className="col-span-2">
                     <label className="text-[10px] font-black text-brand uppercase tracking-widest mb-1 block">Empresa *</label>
                     <input required className="input font-bold" value={formData.empresa || ''} onChange={e => setFormData({...formData, empresa: e.target.value})} />
@@ -347,12 +390,12 @@ const Pipeline = () => {
                     <input required className="input" placeholder="Ej: Interesado, llamar mañana" value={formData.nota_corta || ''} onChange={e => setFormData({...formData, nota_corta: e.target.value})} />
                   </div>
                 </div>
-                <div className="pt-6 border-t border-gray-100">
-                  <p className="text-[10px] font-black text-gray-300 uppercase tracking-widest mb-4">Opcional</p>
+                <div className="pt-5 border-t border-gray-100">
+                  <p className="text-[10px] font-black text-gray-300 uppercase tracking-widest mb-3">Opcional</p>
                   <div className="grid grid-cols-2 gap-4">
                     <div>
                       <label className="text-[10px] font-bold text-gray-400 uppercase mb-1 block">Email</label>
-                      <input className="input !bg-gray-50/50" value={formData.email || ''} onChange={e => setFormData({...formData, email: e.target.value})} />
+                      <input type="email" className="input !bg-gray-50/50" value={formData.email || ''} onChange={e => setFormData({...formData, email: e.target.value})} />
                     </div>
                     <div>
                       <label className="text-[10px] font-bold text-gray-400 uppercase mb-1 block">Web</label>
@@ -360,7 +403,7 @@ const Pipeline = () => {
                     </div>
                     <div>
                       <label className="text-[10px] font-bold text-gray-400 uppercase mb-1 block">Valor Estimado (€)</label>
-                      <input type="number" className="input !bg-gray-50/50" value={formData.valor_estimado || ''} onChange={e => setFormData({...formData, valor_estimado: e.target.value})} />
+                      <input type="number" min="0" className="input !bg-gray-50/50" value={formData.valor_estimado || ''} onChange={e => setFormData({...formData, valor_estimado: e.target.value})} />
                     </div>
                     <div>
                       <label className="text-[10px] font-bold text-gray-400 uppercase mb-1 block">Prob. Cierre</label>
@@ -374,7 +417,17 @@ const Pipeline = () => {
                   </div>
                 </div>
               </div>
-              <div className="px-8 py-5 border-t border-gray-100 bg-gray-50/50 flex justify-end gap-3 shrink-0">
+              <div className="px-6 py-4 border-t border-gray-100 bg-gray-50/50 flex flex-wrap items-center justify-end gap-3 shrink-0">
+                {formData.id && (
+                  <button
+                    type="button"
+                    disabled={converting}
+                    onClick={() => confirmConvert ? doConvert() : setConfirmConvert(true)}
+                    className={`mr-auto inline-flex items-center gap-1.5 px-4 py-2.5 text-xs font-black uppercase tracking-wider rounded-2xl transition-colors disabled:opacity-60 ${confirmConvert ? 'bg-emerald-500 text-white hover:bg-emerald-600' : 'text-emerald-600 bg-emerald-50 hover:bg-emerald-100'}`}
+                  >
+                    <UserCheck className="w-4 h-4" /> {converting ? 'Convirtiendo…' : confirmConvert ? '¿Confirmar conversión?' : 'Convertir en Cliente'}
+                  </button>
+                )}
                 <button type="button" onClick={() => setShowModal(false)} className="px-5 py-2.5 text-sm font-bold text-gray-500">Cancelar</button>
                 <button type="submit" className="btn-primary !py-2.5 px-8 rounded-2xl font-bold text-xs uppercase tracking-wider">Guardar</button>
               </div>
@@ -395,7 +448,7 @@ const Pipeline = () => {
             <h3 className="text-lg font-black text-gray-900 mb-6">¿Eliminar lead?</h3>
             <div className="flex gap-3">
               <button onClick={() => setDeleteId(null)} className="flex-1 py-2.5 text-sm font-bold text-gray-500 hover:bg-gray-100 rounded-2xl">No</button>
-              <button onClick={() => { api(`/api/leads/${deleteId}`, { method: 'DELETE', headers: h }).then(() => { setDeleteId(null); fetchLeads(); }); }} className="flex-1 bg-red-500 text-white font-bold py-2.5 rounded-2xl text-xs uppercase">Sí, eliminar</button>
+              <button onClick={() => { api(`/api/leads/${deleteId}`, { method: 'DELETE', headers: h }).then(() => { setDeleteId(null); fetchLeads(); toast.success('Lead eliminado'); }); }} className="flex-1 bg-red-500 text-white font-bold py-2.5 rounded-2xl text-xs uppercase">Sí, eliminar</button>
             </div>
           </div>
         </div>

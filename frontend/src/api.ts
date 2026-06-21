@@ -45,8 +45,10 @@ async function dashboard() {
     .slice(0, 10)
     .map(l => ({ id: l.id, empresa: l.empresa, contacto: l.contacto, follow_up: leadFollow(l), interes: coalesce(l, 'interes_principal', 'servicio_interesado'), nota_corta: l.nota_corta, notas: l.notas }));
   const pendientes = payments.filter(p => !p.estado || p.estado !== 'cobrado');
+  // Los clientes de Baja no tienen nada que revisar: fuera de los avisos de revisión.
+  const clienteRevisable = (c: any) => c.estado_cliente !== 'Baja' && c.proxima_revision && c.proxima_revision !== '' && c.proxima_revision < t;
   const overdueClients = clients
-    .filter(c => c.proxima_revision && c.proxima_revision !== '' && c.proxima_revision < t)
+    .filter(clienteRevisable)
     .sort((a, b) => (a.proxima_revision > b.proxima_revision ? 1 : -1))
     .slice(0, 10)
     .map(c => ({ id: c.id, empresa: c.empresa, servicio: c.servicio_contratado || '', proxima_revision: c.proxima_revision, notas: c.notas || '' }));
@@ -54,7 +56,35 @@ async function dashboard() {
     .filter(t2 => !t2.estado || t2.estado !== 'Completado')
     .sort((a, b) => ((a.fecha_limite || '') > (b.fecha_limite || '') ? 1 : -1))
     .slice(0, 5);
+
+  // Ingresos cobrados de los últimos 6 meses (para la gráfica de barras)
+  const now = new Date();
+  const revenueByMonth = [];
+  for (let i = 5; i >= 0; i--) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    const ym = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+    const label = d.toLocaleDateString('es-ES', { month: 'short' });
+    const total = payments
+      .filter(p => p.estado === 'cobrado' && String(coalesce(p, 'fecha') || '').slice(0, 7) === ym)
+      .reduce((s, p) => s + (Number(p.importe) || 0), 0);
+    revenueByMonth.push({ label, total });
+  }
+
+  // Embudo de ventas: nº de leads por estado
+  const FUNNEL = ['Prospecto', 'Contactado', 'Reunión Agendada', 'Propuesta Enviada', 'Esperando respuesta', 'Cerrado'];
+  const pipelineFunnel = FUNNEL.map(estado => ({ estado, count: leads.filter(l => (l.estado || 'Prospecto') === estado).length }));
+
+  // Alertas "Requiere acción" — calculadas aquí para no recargar las tablas en /api/alerts.
+  const alertsList: any[] = [];
+  activeLeads.forEach(l => { const f = leadFollow(l); if (f && f < t) alertsList.push({ type: 'lead', empresa: l.empresa, titulo: coalesce(l, 'proxima_accion', 'interes_principal', 'servicio_interesado') || 'Follow-up pendiente', fecha: f }); });
+  tasks.filter(t2 => t2.estado === 'Bloqueado').forEach(t2 => alertsList.push({ type: 'task', empresa: coalesce(t2, 'empresa_relacionada', 'relacionado_con') || 'Interno', titulo: t2.titulo, fecha: t2.bloqueos }));
+  pendientes.forEach(p => { const f = coalesce(p, 'fecha_prevista_cobro', 'fecha_vencimiento', 'fecha'); if (f && f < t) alertsList.push({ type: 'payment', empresa: p.cliente, titulo: p.concepto, fecha: f }); });
+  clients.filter(c => c.estado_cliente === 'En Riesgo').forEach(c => alertsList.push({ type: 'risk', empresa: c.empresa, titulo: c.riesgos, fecha: 'Inmediato' }));
+
   return {
+    revenueByMonth,
+    pipelineFunnel,
+    alerts: alertsList,
     leadsActivos: activeLeads.length,
     followUpsVencidos: overdueLeads.length,
     clientesActivos: clients.filter(c => !c.estado_cliente || c.estado_cliente !== 'Baja').length,
@@ -62,7 +92,7 @@ async function dashboard() {
     pagosPendientesTotal: pendientes.reduce((s, p) => s + (Number(p.importe) || 0), 0),
     cobradoMes: payments.filter(p => p.estado === 'cobrado' && p.fecha >= startOfMonth() && p.fecha <= t).reduce((s, p) => s + (Number(p.importe) || 0), 0),
     tareasPendientesCount: tasks.filter(t2 => !t2.estado || t2.estado !== 'Completado').length,
-    clientesRevisionCount: clients.filter(c => c.proxima_revision && c.proxima_revision !== '' && c.proxima_revision < t).length,
+    clientesRevisionCount: clients.filter(clienteRevisable).length,
     comisionesPendientesTotal: payments.filter(p => p.afiliado_id && p.comision_estado !== 'pagada').reduce((s, p) => s + (Number(p.importe) || 0) * (Number(p.comision_pct) || 0) / 100, 0),
     recentTasks,
     overdueLeads,

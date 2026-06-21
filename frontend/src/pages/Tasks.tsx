@@ -1,6 +1,9 @@
 import { useEffect, useState } from 'react';
-import { Plus, Search, Calendar, Briefcase, CheckCircle2, Trash2, X } from 'lucide-react';
+import { Plus, Search, Calendar, Briefcase, CheckCircle2, Trash2, X, Check } from 'lucide-react';
 import { api, authHeaders } from '../api';
+import { toast } from '../components/toast';
+import { fmtDate } from '../utils/date';
+import { useEscapeKey } from '../utils/useEscapeKey';
 
 const val = (obj: any, ...keys: string[]) => {
   for (const k of keys) { if (obj[k] != null && obj[k] !== '') return obj[k]; }
@@ -19,8 +22,10 @@ const Tasks = () => {
   const [activeTab, setActiveTab] = useState('Pendiente');
 
   const h = authHeaders();
-  const fetchTasks = () => api('/api/tasks', { headers: h }).then(r => r.json()).then(setTasks);
+  const fetchTasks = () => api('/api/tasks', { headers: h }).then(r => r.json()).then(d => setTasks(Array.isArray(d) ? d : [])).catch(() => toast.error('No se pudieron cargar las tareas'));
   useEffect(() => { fetchTasks(); }, []);
+  useEscapeKey(showModal, () => setShowModal(false));
+  useEscapeKey(deleteId != null, () => setDeleteId(null));
 
   const openEdit = (t: any) => {
     setFormData({
@@ -50,9 +55,15 @@ const Tasks = () => {
     api(url, { method, headers: { ...h, 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
       .then(async r => {
         const data = await r.json().catch(() => ({}));
-        if (!r.ok) { alert('Error: ' + (data.error || r.status)); return; }
+        if (!r.ok) { toast.error('Error: ' + (data.error || r.status)); return; }
+        toast.success(formData.id ? 'Tarea actualizada' : 'Tarea creada');
         setShowModal(false); fetchTasks();
       });
+  };
+
+  const completeTask = (t: any) => {
+    api(`/api/tasks/${t.id}`, { method: 'PATCH', headers: { ...h, 'Content-Type': 'application/json' }, body: JSON.stringify({ estado: 'Completado' }) })
+      .then(() => { fetchTasks(); toast.success('Tarea completada ✓'); });
   };
 
   const getRelacionado = (t: any) => val(t, 'relacionado_con', 'empresa_relacionada', 'related_empresa') || 'Interno';
@@ -95,7 +106,12 @@ const Tasks = () => {
           <div key={task.id} className="card group p-5 border-none shadow-sm ring-1 ring-gray-100 hover:ring-brand/50 transition-all cursor-pointer" onClick={() => openEdit(task)}>
             <div className="flex items-start justify-between gap-4 mb-4">
               <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded-lg ${getStatusColor(task.estado || 'Pendiente')}`}>{task.estado || 'Pendiente'}</span>
-              <button onClick={(e) => { e.stopPropagation(); setDeleteId(task.id); }} className="p-1 text-gray-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"><Trash2 className="w-4 h-4" /></button>
+              <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                {task.estado !== 'Completado' && (
+                  <button title="Marcar completada" onClick={(e) => { e.stopPropagation(); completeTask(task); }} className="p-1 text-gray-300 hover:text-emerald-500"><Check className="w-4 h-4" /></button>
+                )}
+                <button title="Eliminar" onClick={(e) => { e.stopPropagation(); setDeleteId(task.id); }} className="p-1 text-gray-300 hover:text-red-500"><Trash2 className="w-4 h-4" /></button>
+              </div>
             </div>
             <h4 className="font-bold text-gray-900 text-sm leading-snug mb-2">{task.titulo}</h4>
             <p className="text-xs text-gray-400 font-medium flex items-center gap-1.5 mb-4"><Briefcase className="w-3 h-3" /> {getRelacionado(task)}</p>
@@ -105,7 +121,7 @@ const Tasks = () => {
                 <span className="text-[10px] font-bold text-gray-500 uppercase">{getResponsable(task)}</span>
               </div>
               <div className="flex items-center gap-1 text-[10px] font-bold text-gray-400">
-                <Calendar className="w-3 h-3" />{task.fecha_limite || '—'}
+                <Calendar className="w-3 h-3" />{fmtDate(task.fecha_limite)}
               </div>
             </div>
           </div>
@@ -122,13 +138,13 @@ const Tasks = () => {
       {showModal && (
         <div className="fixed inset-0 z-50 overflow-y-auto bg-black/40 backdrop-blur-sm" onClick={() => setShowModal(false)}>
           <div className="flex min-h-full items-center justify-center p-4 py-8">
-            <div className="bg-white rounded-3xl w-full max-w-lg shadow-modal overflow-hidden animate-slide-up flex flex-col max-h-[90vh]" onClick={e => e.stopPropagation()}>
+            <div className="bg-white rounded-3xl w-full max-w-2xl shadow-modal overflow-hidden animate-slide-up flex flex-col max-h-[90vh]" onClick={e => e.stopPropagation()}>
               <form onSubmit={handleSubmit} className="flex flex-col min-h-0 flex-1">
-                <div className="px-8 py-5 border-b border-gray-100 flex items-center justify-between bg-gray-50/50 shrink-0">
+                <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between bg-gray-50/50 shrink-0">
                   <h3 className="text-lg font-black text-gray-900">{formData.id ? 'Editar Tarea' : 'Nueva Tarea'}</h3>
                   <button type="button" onClick={() => setShowModal(false)} className="p-2 rounded-xl hover:bg-gray-100 text-gray-400"><X className="w-5 h-5" /></button>
                 </div>
-                <div className="p-8 space-y-5 overflow-y-auto flex-1">
+                <div className="p-6 space-y-4 overflow-y-auto flex-1">
                   <div>
                     <label className="text-[10px] font-black text-brand uppercase tracking-widest mb-1 block">Título *</label>
                     <input required placeholder="Ej: Subir demo de voz" className="input font-bold text-base" value={formData.titulo || ''} onChange={e => setFormData({...formData, titulo: e.target.value})} />
@@ -170,7 +186,7 @@ const Tasks = () => {
                     <textarea rows={3} className="input !bg-gray-50/50" placeholder="Detalles, bloqueos..." value={formData.descripcion || ''} onChange={e => setFormData({...formData, descripcion: e.target.value})} />
                   </div>
                 </div>
-                <div className="px-8 py-5 border-t border-gray-100 bg-gray-50/50 flex justify-end gap-3 shrink-0">
+                <div className="px-6 py-4 border-t border-gray-100 bg-gray-50/50 flex justify-end gap-3 shrink-0">
                   <button type="button" onClick={() => setShowModal(false)} className="px-5 py-2.5 text-sm font-bold text-gray-500">Cancelar</button>
                   <button type="submit" className="btn-primary !py-2.5 px-8 rounded-2xl font-bold text-xs uppercase tracking-wider">Guardar</button>
                 </div>
@@ -189,7 +205,7 @@ const Tasks = () => {
               <p className="text-sm text-gray-500 mb-6">Esta acción no se puede deshacer.</p>
               <div className="flex gap-3">
                 <button onClick={() => setDeleteId(null)} className="flex-1 py-2.5 text-sm font-bold text-gray-500 hover:bg-gray-100 rounded-2xl">Cancelar</button>
-                <button onClick={() => { api(`/api/tasks/${deleteId}`, { method: 'DELETE', headers: h }).then(() => { setDeleteId(null); fetchTasks(); }); }} className="flex-1 bg-red-500 text-white font-bold py-2.5 rounded-2xl text-xs uppercase">Eliminar</button>
+                <button onClick={() => { api(`/api/tasks/${deleteId}`, { method: 'DELETE', headers: h }).then(() => { setDeleteId(null); fetchTasks(); toast.success('Tarea eliminada'); }); }} className="flex-1 bg-red-500 text-white font-bold py-2.5 rounded-2xl text-xs uppercase">Eliminar</button>
               </div>
             </div>
           </div>

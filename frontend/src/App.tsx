@@ -6,9 +6,12 @@ import Clients from './pages/Clients';
 import Interactions from './pages/Interactions';
 import Payments from './pages/Payments';
 import Tasks from './pages/Tasks';
+import Calendar from './pages/Calendar';
 import Affiliates from './pages/Affiliates';
 import Settings from './pages/Settings';
 import Login from './pages/Login';
+import ToastContainer from './components/ToastContainer';
+import ErrorBoundary from './components/ErrorBoundary';
 import { AuthProvider, useAuth } from './auth';
 
 function CrmRoutes() {
@@ -21,6 +24,7 @@ function CrmRoutes() {
           <Route path="/pipeline" element={<Pipeline />} />
           <Route path="/clients" element={<Clients />} />
           <Route path="/tasks" element={<Tasks />} />
+          <Route path="/calendar" element={<Calendar />} />
           <Route path="/interactions" element={<Interactions />} />
           <Route path="/payments" element={<Payments />} />
           <Route path="/affiliates" element={<Affiliates />} />
@@ -45,9 +49,12 @@ function Gate() {
 
 function App() {
   return (
-    <AuthProvider>
-      <Gate />
-    </AuthProvider>
+    <ErrorBoundary>
+      <AuthProvider>
+        <Gate />
+        <ToastContainer />
+      </AuthProvider>
+    </ErrorBoundary>
   );
 }
 

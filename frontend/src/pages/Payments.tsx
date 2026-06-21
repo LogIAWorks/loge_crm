@@ -1,6 +1,9 @@
 import { useEffect, useState } from 'react';
-import { Plus, Search, DollarSign, Edit2, Trash2, X, ShieldCheck, ArrowDownLeft, Handshake } from 'lucide-react';
+import { Plus, Search, DollarSign, Edit2, Trash2, X, ShieldCheck, ArrowDownLeft, Handshake, Download } from 'lucide-react';
 import { api, authHeaders, jsonHeaders } from '../api';
+import { toast } from '../components/toast';
+import { exportToCSV } from '../utils/csv';
+import { useEscapeKey } from '../utils/useEscapeKey';
 
 const val = (obj: any, ...keys: string[]) => {
   for (const k of keys) { if (obj[k] != null && obj[k] !== '') return obj[k]; }
@@ -18,9 +21,11 @@ const Payments = () => {
   const [affiliates, setAffiliates] = useState<any[]>([]);
 
   const h = authHeaders();
-  const fetchPayments = () => api('/api/payments', { headers: h }).then(r => r.json()).then(setPayments);
-  const fetchAffiliates = () => api('/api/affiliates', { headers: h }).then(r => r.json()).then(setAffiliates);
+  const fetchPayments = () => api('/api/payments', { headers: h }).then(r => r.json()).then(d => setPayments(Array.isArray(d) ? d : [])).catch(() => toast.error('No se pudieron cargar los pagos'));
+  const fetchAffiliates = () => api('/api/affiliates', { headers: h }).then(r => r.json()).then(d => setAffiliates(Array.isArray(d) ? d : []));
   useEffect(() => { fetchPayments(); fetchAffiliates(); }, []);
+  useEscapeKey(showModal, () => setShowModal(false));
+  useEscapeKey(deleteId != null, () => setDeleteId(null));
 
   const openEdit = (p: any) => {
     setFormData({
@@ -65,7 +70,8 @@ const Payments = () => {
     api(url, { method, headers: jsonHeaders(), body: JSON.stringify(body) })
       .then(async r => {
         const data = await r.json().catch(() => ({}));
-        if (!r.ok) { alert('Error: ' + (data.error || r.status)); return; }
+        if (!r.ok) { toast.error('Error: ' + (data.error || r.status)); return; }
+        toast.success(formData.id ? 'Cobro actualizado' : 'Cobro creado');
         setShowModal(false); fetchPayments();
       });
   };
@@ -86,6 +92,41 @@ const Payments = () => {
   };
 
   const getFecha = (p: any) => val(p, 'fecha_prevista_cobro', 'fecha_vencimiento', 'fecha') || '—';
+
+  const [sort, setSort] = useState<{ key: string; dir: 1 | -1 }>({ key: 'fecha', dir: -1 });
+  const sortVal = (p: any, key: string) => key === 'importe' ? Number(p.importe || 0) : key === 'estado' ? (p.estado || '') : getFecha(p);
+  const toggleSort = (key: string) => setSort(s => s.key === key ? { key, dir: (s.dir === 1 ? -1 : 1) } : { key, dir: 1 });
+  const sorted = [...filtered].sort((a, b) => { const x = sortVal(a, sort.key), y = sortVal(b, sort.key); return (x > y ? 1 : x < y ? -1 : 0) * sort.dir; });
+  const arrow = (key: string) => sort.key === key ? (sort.dir === 1 ? ' ↑' : ' ↓') : '';
+
+  const estadoColor = (e: string) => {
+    if (e === 'cobrado') return 'bg-emerald-50 text-emerald-600';
+    if (e === 'vencido') return 'bg-red-50 text-red-600';
+    if (e === 'parcial') return 'bg-blue-50 text-blue-600';
+    return 'bg-amber-50 text-amber-600'; // pendiente
+  };
+
+  const exportCSV = () => {
+    if (filtered.length === 0) { toast.info('No hay pagos que exportar'); return; }
+    exportToCSV('pagos', filtered.map(p => ({
+      fecha: getFecha(p),
+      cliente: p.cliente || '',
+      concepto: p.concepto || '',
+      importe: Number(p.importe || 0),
+      estado: p.estado || '',
+      factura: p.factura_emitida === 'Sí' ? 'Sí' : 'No',
+      contrato: p.contrato_firmado === 'Sí' ? 'Sí' : 'No',
+      colaborador: affName(p.afiliado_id),
+      comision_pct: p.afiliado_id ? Number(p.comision_pct || 0) : '',
+    })), [
+      { key: 'fecha', label: 'Fecha' }, { key: 'cliente', label: 'Cliente' },
+      { key: 'concepto', label: 'Concepto' }, { key: 'importe', label: 'Importe (€)' },
+      { key: 'estado', label: 'Estado' }, { key: 'factura', label: 'Factura' },
+      { key: 'contrato', label: 'Contrato' }, { key: 'colaborador', label: 'Colaborador' },
+      { key: 'comision_pct', label: '% Comisión' },
+    ]);
+    toast.success(`${filtered.length} pagos exportados`);
+  };
 
   return (
     <div className="space-y-6 page-enter pb-10">
@@ -115,24 +156,29 @@ const Payments = () => {
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
           <input type="text" placeholder="Buscar por cliente o concepto..." className="input pl-10 !py-2.5 text-sm" value={search} onChange={e => setSearch(e.target.value)} />
         </div>
-        <button onClick={() => { setFormData({ estado: 'pendiente', fecha: new Date().toISOString().split('T')[0] }); setShowModal(true); }} className="btn-primary !py-2.5 text-sm font-bold px-6">
-          <Plus className="w-4 h-4" /> Nuevo Cobro
-        </button>
+        <div className="flex items-center gap-2">
+          <button onClick={() => exportCSV()} className="btn-secondary !py-2.5 text-sm font-bold px-4" title="Exportar a CSV">
+            <Download className="w-4 h-4" /> Exportar
+          </button>
+          <button onClick={() => { setFormData({ estado: 'pendiente', fecha: new Date().toISOString().split('T')[0] }); setShowModal(true); }} className="btn-primary !py-2.5 text-sm font-bold px-6">
+            <Plus className="w-4 h-4" /> Nuevo Cobro
+          </button>
+        </div>
       </div>
 
-      <div className="card overflow-hidden border-none shadow-sm ring-1 ring-gray-100">
-        <table className="w-full text-left">
+      <div className="card overflow-x-auto border-none shadow-sm ring-1 ring-gray-100">
+        <table className="w-full text-left min-w-[680px]">
           <thead>
             <tr className="bg-gray-50 border-b border-gray-100">
-              <th className="px-6 py-3 text-[10px] font-black uppercase text-gray-400">Fecha</th>
+              <th className="px-6 py-3 text-[10px] font-black uppercase text-gray-400 cursor-pointer select-none hover:text-gray-600" onClick={() => toggleSort('fecha')}>Fecha{arrow('fecha')}</th>
               <th className="px-6 py-3 text-[10px] font-black uppercase text-gray-400">Cliente / Concepto</th>
-              <th className="px-6 py-3 text-[10px] font-black uppercase text-gray-400 text-right">Importe</th>
-              <th className="px-6 py-3 text-[10px] font-black uppercase text-gray-400">Estado</th>
+              <th className="px-6 py-3 text-[10px] font-black uppercase text-gray-400 text-right cursor-pointer select-none hover:text-gray-600" onClick={() => toggleSort('importe')}>Importe{arrow('importe')}</th>
+              <th className="px-6 py-3 text-[10px] font-black uppercase text-gray-400 cursor-pointer select-none hover:text-gray-600" onClick={() => toggleSort('estado')}>Estado{arrow('estado')}</th>
               <th className="px-6 py-3"></th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-50">
-            {filtered.map(p => (
+            {sorted.map(p => (
               <tr key={p.id} className="group hover:bg-gray-50/50 transition-colors cursor-pointer" onClick={() => openEdit(p)}>
                 <td className="px-6 py-4">
                   <p className="text-xs font-bold text-gray-900">{getFecha(p)}</p>
@@ -154,7 +200,7 @@ const Payments = () => {
                   <p className="text-sm font-black text-gray-900">€{Number(p.importe || 0).toLocaleString('es-ES')}</p>
                 </td>
                 <td className="px-6 py-4">
-                  <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded-lg ${p.estado === 'cobrado' ? 'bg-emerald-50 text-emerald-600' : 'bg-amber-50 text-amber-600'}`}>{p.estado}</span>
+                  <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded-lg ${estadoColor(p.estado)}`}>{p.estado}</span>
                 </td>
                 <td className="px-6 py-4 text-right">
                   <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
@@ -175,25 +221,25 @@ const Payments = () => {
       {showModal && (
         <div className="fixed inset-0 z-50 overflow-y-auto bg-black/40 backdrop-blur-sm" onClick={() => setShowModal(false)}>
           <div className="flex min-h-full items-center justify-center p-4 py-8">
-            <div className="bg-white rounded-3xl w-full max-w-lg shadow-modal overflow-hidden animate-slide-up flex flex-col max-h-[90vh]" onClick={e => e.stopPropagation()}>
+            <div className="bg-white rounded-3xl w-full max-w-2xl shadow-modal overflow-hidden animate-slide-up flex flex-col max-h-[90vh]" onClick={e => e.stopPropagation()}>
               <form onSubmit={handleSubmit} className="flex flex-col min-h-0 flex-1">
-                <div className="px-8 py-5 border-b border-gray-100 flex items-center justify-between bg-gray-50/50 shrink-0">
+                <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between bg-gray-50/50 shrink-0">
                   <h3 className="text-lg font-black text-gray-900">{formData.id ? 'Editar Cobro' : 'Nuevo Cobro'}</h3>
                   <button type="button" onClick={() => setShowModal(false)} className="p-2 rounded-xl hover:bg-gray-100 text-gray-400"><X className="w-5 h-5" /></button>
                 </div>
-                <div className="p-8 space-y-5 overflow-y-auto flex-1">
-                  <div>
-                    <label className="text-[10px] font-black text-brand uppercase tracking-widest mb-1 block">Cliente *</label>
-                    <input required placeholder="Ej: Miami Gastro" className="input font-bold" value={formData.cliente || ''} onChange={e => setFormData({...formData, cliente: e.target.value})} />
-                  </div>
-                  <div>
-                    <label className="text-[10px] font-black text-brand uppercase tracking-widest mb-1 block">Concepto *</label>
-                    <input required placeholder="Ej: Setup Agente de Voz" className="input" value={formData.concepto || ''} onChange={e => setFormData({...formData, concepto: e.target.value})} />
-                  </div>
+                <div className="p-6 space-y-4 overflow-y-auto flex-1">
                   <div className="grid grid-cols-2 gap-4">
+                    <div className="col-span-2">
+                      <label className="text-[10px] font-black text-brand uppercase tracking-widest mb-1 block">Cliente *</label>
+                      <input required placeholder="Ej: Miami Gastro" className="input font-bold" value={formData.cliente || ''} onChange={e => setFormData({...formData, cliente: e.target.value})} />
+                    </div>
+                    <div className="col-span-2">
+                      <label className="text-[10px] font-black text-brand uppercase tracking-widest mb-1 block">Concepto *</label>
+                      <input required placeholder="Ej: Setup Agente de Voz" className="input" value={formData.concepto || ''} onChange={e => setFormData({...formData, concepto: e.target.value})} />
+                    </div>
                     <div>
                       <label className="text-[10px] font-black text-brand uppercase tracking-widest mb-1 block">Importe (€) *</label>
-                      <input type="number" step="0.01" required className="input font-black" value={formData.importe || ''} onChange={e => setFormData({...formData, importe: e.target.value})} />
+                      <input type="number" step="0.01" min="0" required className="input font-black" value={formData.importe || ''} onChange={e => setFormData({...formData, importe: e.target.value})} />
                     </div>
                     <div>
                       <label className="text-[10px] font-black text-brand uppercase tracking-widest mb-1 block">Estado *</label>
@@ -201,10 +247,10 @@ const Payments = () => {
                         {ESTADOS.map(e => <option key={e} value={e}>{e}</option>)}
                       </select>
                     </div>
-                  </div>
-                  <div>
-                    <label className="text-[10px] font-black text-brand uppercase tracking-widest mb-1 block">Fecha *</label>
-                    <input type="date" required className="input" value={formData.fecha || ''} onChange={e => setFormData({...formData, fecha: e.target.value})} />
+                    <div className="col-span-2">
+                      <label className="text-[10px] font-black text-brand uppercase tracking-widest mb-1 block">Fecha *</label>
+                      <input type="date" required className="input" value={formData.fecha || ''} onChange={e => setFormData({...formData, fecha: e.target.value})} />
+                    </div>
                   </div>
                   <div className="grid grid-cols-2 gap-4 pt-4 border-t border-gray-50">
                     <label className="flex items-center gap-2 cursor-pointer p-3 bg-gray-50 rounded-2xl">
@@ -250,7 +296,7 @@ const Payments = () => {
                     </div>
                   </div>
                 </div>
-                <div className="px-8 py-5 border-t border-gray-100 bg-gray-50/50 flex justify-end gap-3 shrink-0">
+                <div className="px-6 py-4 border-t border-gray-100 bg-gray-50/50 flex justify-end gap-3 shrink-0">
                   <button type="button" onClick={() => setShowModal(false)} className="px-5 py-2.5 text-sm font-bold text-gray-500">Cancelar</button>
                   <button type="submit" className="btn-primary !py-2.5 px-8 rounded-2xl font-bold text-xs uppercase tracking-wider">Guardar</button>
                 </div>
@@ -269,7 +315,7 @@ const Payments = () => {
               <p className="text-sm text-gray-500 mb-6">Esta acción no se puede deshacer.</p>
               <div className="flex gap-3">
                 <button onClick={() => setDeleteId(null)} className="flex-1 py-2.5 text-sm font-bold text-gray-500 hover:bg-gray-100 rounded-2xl">Cancelar</button>
-                <button onClick={() => { api(`/api/payments/${deleteId}`, { method: 'DELETE', headers: h }).then(() => { setDeleteId(null); fetchPayments(); }); }} className="flex-1 bg-red-500 text-white font-bold py-2.5 rounded-2xl text-xs uppercase">Eliminar</button>
+                <button onClick={() => { api(`/api/payments/${deleteId}`, { method: 'DELETE', headers: h }).then(() => { setDeleteId(null); fetchPayments(); toast.success('Registro eliminado'); }); }} className="flex-1 bg-red-500 text-white font-bold py-2.5 rounded-2xl text-xs uppercase">Eliminar</button>
               </div>
             </div>
           </div>

@@ -42,7 +42,7 @@ const Company360Modal = ({ companyName, onClose }: Props) => {
             <div className="space-y-8">
               
               {/* Stats Row */}
-              <div className="grid grid-cols-4 gap-4">
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
                 <div className="bg-white rounded-xl p-4 border border-gray-100 shadow-sm">
                   <div className="flex items-center gap-2 mb-2"><Target className="w-4 h-4 text-blue-500"/><span className="text-xs font-semibold text-gray-500">Leads</span></div>
                   <p className="text-xl font-bold text-gray-900">{data.leads?.length || 0}</p>
@@ -63,7 +63,7 @@ const Company360Modal = ({ companyName, onClose }: Props) => {
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-8">
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
                 {/* Column 1 */}
                 <div className="space-y-8">
                   {/* Pipeline */}
