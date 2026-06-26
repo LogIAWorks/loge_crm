@@ -5,6 +5,7 @@ import Pipeline from './pages/Pipeline';
 import Clients from './pages/Clients';
 import Interactions from './pages/Interactions';
 import Payments from './pages/Payments';
+import Annual from './pages/Annual';
 import Tasks from './pages/Tasks';
 import Calendar from './pages/Calendar';
 import Affiliates from './pages/Affiliates';
@@ -27,6 +28,7 @@ function CrmRoutes() {
           <Route path="/calendar" element={<Calendar />} />
           <Route path="/interactions" element={<Interactions />} />
           <Route path="/payments" element={<Payments />} />
+          <Route path="/annual" element={<Annual />} />
           <Route path="/affiliates" element={<Affiliates />} />
           <Route path="/settings" element={<Settings />} />
         </Routes>

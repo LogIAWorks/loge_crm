@@ -1,5 +1,5 @@
 import { NavLink, useLocation } from 'react-router-dom';
-import { LayoutDashboard, Users, MessageSquare, CreditCard, Settings, Target, CheckSquare, Handshake, LogOut, CalendarDays } from 'lucide-react';
+import { LayoutDashboard, Users, MessageSquare, CreditCard, Settings, Target, CheckSquare, Handshake, LogOut, CalendarDays, BarChart3 } from 'lucide-react';
 import { useAuth } from '../auth';
 
 const navItems = [
@@ -10,6 +10,7 @@ const navItems = [
   { name: 'Calendario', path: '/calendar', icon: CalendarDays },
   { name: 'Interacciones', path: '/interactions', icon: MessageSquare },
   { name: 'Pagos', path: '/payments', icon: CreditCard },
+  { name: 'Resumen Anual', path: '/annual', icon: BarChart3 },
   { name: 'Afiliados', path: '/affiliates', icon: Handshake },
   { name: 'Ajustes', path: '/settings', icon: Settings },
 ];
