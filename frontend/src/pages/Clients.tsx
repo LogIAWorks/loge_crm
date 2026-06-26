@@ -14,10 +14,15 @@ const val = (obj: any, ...keys: string[]) => {
 };
 
 const ESTADOS_CLIENTE = ['Activo', 'Onboarding', 'Mantenimiento', 'En Pausa', 'En Riesgo', 'Baja'];
-const ESTADOS_PAGO = ['Al día', 'Pendiente', 'Retraso', 'Moroso'];
+
+// "Hoy" en horario de Madrid (YYYY-MM-DD), para detectar pagos vencidos.
+const hoy = () => new Date().toLocaleDateString('en-CA', { timeZone: 'Europe/Madrid' });
+// Fecha relevante de un pago (misma prioridad que el resto del CRM).
+const fechaPago = (p: any) => val(p, 'fecha_prevista_cobro', 'fecha_vencimiento', 'fecha');
 
 const Clients = () => {
   const [clients, setClients] = useState<any[]>([]);
+  const [payments, setPayments] = useState<any[]>([]);
   const [search, setSearch] = useState('');
   const [showModal, setShowModal] = useState(false);
   const [formData, setFormData] = useState<any>({});
@@ -26,7 +31,8 @@ const Clients = () => {
 
   const h = authHeaders();
   const fetchClients = () => api('/api/clients', { headers: h }).then(r => r.json()).then(d => setClients(Array.isArray(d) ? d : [])).catch(() => toast.error('No se pudieron cargar los clientes'));
-  useEffect(() => { fetchClients(); }, []);
+  const fetchPayments = () => api('/api/payments', { headers: h }).then(r => r.json()).then(d => setPayments(Array.isArray(d) ? d : [])).catch(() => {});
+  useEffect(() => { fetchClients(); fetchPayments(); }, []);
   useEscapeKey(showModal, () => setShowModal(false));
   useEscapeKey(deleteId != null, () => setDeleteId(null));
   useEscapeKey(view360 != null, () => setView360(null));
@@ -37,7 +43,6 @@ const Clients = () => {
       servicio_contratado: val(client, 'servicio_contratado') || '',
       valor: val(client, 'valor', 'importe') || '',
       estado_cliente: val(client, 'estado_cliente') || 'Activo',
-      estado_pago: val(client, 'estado_pago') || 'Al día',
       proxima_revision: val(client, 'proxima_revision') || '',
       // Unificar notas + proximo_paso en un solo campo visible
       notas: val(client, 'notas', 'proximo_paso', 'siguiente_accion') || '',
@@ -57,7 +62,6 @@ const Clients = () => {
       servicio_contratado: formData.servicio_contratado,
       valor: formData.valor ? Number(formData.valor) : null,
       estado_cliente: formData.estado_cliente,
-      estado_pago: formData.estado_pago,
       proxima_revision: formData.proxima_revision,
       notas: formData.notas,
       proximo_paso: formData.notas, // sincronizar ambas columnas
@@ -114,12 +118,33 @@ const Clients = () => {
     toast.success(`${filtered.length} clientes exportados`);
   };
 
+  // Pagos como única fuente de verdad: el estado de pago e importes del cliente
+  // se DERIVAN de sus pagos (tabla payments), no de columnas guardadas.
+  const pagosDe = (c: any) => payments.filter(p =>
+    (p.client_id != null && p.client_id === c.id) ||
+    (p.client_id == null && p.cliente && p.cliente === c.empresa)
+  );
+  const resumenPago = (c: any) => {
+    const pays = pagosDe(c);
+    if (pays.length === 0) return { tiene: false, cobrado: 0, pendiente: 0, estado: '—' };
+    const cobrado = pays.filter(p => p.estado === 'cobrado').reduce((s, p) => s + (Number(p.importe) || 0), 0);
+    const sinCobrar = pays.filter(p => p.estado !== 'cobrado');
+    const pendiente = sinCobrar.reduce((s, p) => s + (Number(p.importe) || 0), 0);
+    let estado = 'Al día';
+    if (sinCobrar.length > 0) {
+      const t = hoy();
+      const vencido = sinCobrar.some(p => { const f = fechaPago(p); return f && f < t; });
+      estado = vencido ? 'Retraso' : 'Pendiente';
+    }
+    return { tiene: true, cobrado, pendiente, estado };
+  };
+
   const getImporte = (c: any) => Number(val(c, 'valor', 'importe') || 0);
-  const getCobrado = (c: any) => Number(c.cobrado ?? 0);
-  const getPendiente = (c: any) => Number(c.pendiente ?? 0);
+  const getCobrado = (c: any) => resumenPago(c).cobrado;
+  const getPendiente = (c: any) => resumenPago(c).pendiente;
   const getServicio = (c: any) => val(c, 'servicio_contratado') || '—';
   const getEstadoCliente = (c: any) => val(c, 'estado_cliente') || 'Activo';
-  const getEstadoPago = (c: any) => val(c, 'estado_pago') || '—';
+  const getEstadoPago = (c: any) => resumenPago(c).estado;
   const getProximaRev = (c: any) => val(c, 'proxima_revision') || '—';
   const getNotas = (c: any) => val(c, 'notas', 'proximo_paso', 'siguiente_accion') || '';
   // Un cliente de Baja no tiene nada que revisar: no genera aviso de revisión vencida.
@@ -130,6 +155,14 @@ const Clients = () => {
   const renderStars = (n: number) => (
     <div className="flex gap-0.5">{[1,2,3,4,5].map(i => <Star key={i} className={`w-3 h-3 ${i <= n ? 'text-amber-400 fill-amber-400' : 'text-gray-200'}`} />)}</div>
   );
+
+  // Color del semáforo de pago derivado (Al día / Pendiente / Retraso / —).
+  const estadoPagoColor = (e: string) => {
+    if (e === 'Al día') return 'text-emerald-500';
+    if (e === 'Retraso') return 'text-red-500';
+    if (e === 'Pendiente') return 'text-amber-500';
+    return 'text-gray-300'; // '—' sin pagos
+  };
 
   const estadoColor = (e: string) => {
     if (e === 'Activo') return 'text-emerald-600 bg-emerald-50';
@@ -150,7 +183,7 @@ const Clients = () => {
           <button onClick={() => exportCSV()} className="btn-secondary !py-2.5 text-sm font-bold px-4" title="Exportar a CSV">
             <Download className="w-4 h-4" /> Exportar
           </button>
-          <button onClick={() => { setFormData({ estado_cliente: 'Activo', estado_pago: 'Pendiente' }); setShowModal(true); }} className="btn-primary !py-2.5 text-sm font-bold px-6">
+          <button onClick={() => { setFormData({ estado_cliente: 'Activo' }); setShowModal(true); }} className="btn-primary !py-2.5 text-sm font-bold px-6">
             <Plus className="w-4 h-4" /> Nuevo Cliente
           </button>
         </div>
@@ -170,7 +203,9 @@ const Clients = () => {
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-50">
-            {sorted.map(client => (
+            {sorted.map(client => {
+              const rp = resumenPago(client);
+              return (
               <tr key={client.id} className="group hover:bg-gray-50/50 transition-colors cursor-pointer" onClick={() => openEdit(client)}>
                 <td className="px-6 py-4">
                   <p className="font-bold text-gray-900 text-sm">{client.empresa}</p>
@@ -181,7 +216,7 @@ const Clients = () => {
                 </td>
                 <td className="px-6 py-4">
                   <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded-lg ${estadoColor(getEstadoCliente(client))}`}>{getEstadoCliente(client)}</span>
-                  <p className={`text-[10px] font-bold mt-1 ${getEstadoPago(client) === 'Al día' ? 'text-emerald-500' : 'text-amber-500'}`}>{getEstadoPago(client)}</p>
+                  <p className={`text-[10px] font-bold mt-1 ${estadoPagoColor(rp.estado)}`}>{rp.estado}</p>
                 </td>
                 <td className="px-6 py-4">
                   {getEstadoCliente(client) === 'Baja'
@@ -191,9 +226,9 @@ const Clients = () => {
                 </td>
                 <td className="px-6 py-4 text-right">
                   <p className="text-sm font-black text-gray-900">€{getImporte(client).toLocaleString('es-ES')}</p>
-                  {getPendiente(client) > 0
-                    ? <p className="text-[10px] font-bold text-amber-600 mt-0.5">Pend. €{getPendiente(client).toLocaleString('es-ES')}</p>
-                    : getCobrado(client) > 0 && <p className="text-[10px] font-bold text-emerald-500 mt-0.5">Cobrado</p>}
+                  {rp.pendiente > 0
+                    ? <p className="text-[10px] font-bold text-amber-600 mt-0.5">Pend. €{rp.pendiente.toLocaleString('es-ES')}</p>
+                    : rp.cobrado > 0 && <p className="text-[10px] font-bold text-emerald-500 mt-0.5">Cobrado</p>}
                 </td>
                 <td className="px-6 py-4">
                   {client.satisfaccion ? renderStars(client.satisfaccion) : <span className="text-[10px] text-gray-300">—</span>}
@@ -206,7 +241,8 @@ const Clients = () => {
                   </div>
                 </td>
               </tr>
-            ))}
+              );
+            })}
             {filtered.length === 0 && (
               <tr><td colSpan={7} className="py-16 text-center"><UsersIcon className="w-10 h-10 text-gray-200 mx-auto mb-3" /><p className="text-sm text-gray-400">Sin clientes</p></td></tr>
             )}
@@ -250,14 +286,9 @@ const Clients = () => {
                     </select>
                   </div>
                   <div>
-                    <label className="text-[10px] font-black text-brand uppercase tracking-widest mb-1 block">Estado Pago *</label>
-                    <select required className="input" value={formData.estado_pago || 'Pendiente'} onChange={e => setFormData({...formData, estado_pago: e.target.value})}>
-                      {ESTADOS_PAGO.map(e => <option key={e} value={e}>{e}</option>)}
-                    </select>
-                  </div>
-                  <div>
-                    <label className="text-[10px] font-black text-brand uppercase tracking-widest mb-1 block">Próxima Revisión *</label>
-                    <input type="date" required className="input" value={formData.proxima_revision || ''} onChange={e => setFormData({...formData, proxima_revision: e.target.value})} />
+                    <label className="text-[10px] font-black text-brand uppercase tracking-widest mb-1 block">Próxima Revisión</label>
+                    <input type="date" className="input" value={formData.proxima_revision || ''} onChange={e => setFormData({...formData, proxima_revision: e.target.value})} />
+                    <p className="text-[9px] text-gray-400 mt-1">Opcional · déjalo vacío si no requiere seguimiento</p>
                   </div>
                   <div className="col-span-2">
                     <label className="text-[10px] font-black text-brand uppercase tracking-widest mb-1 block">Próximo Paso / Notas *</label>

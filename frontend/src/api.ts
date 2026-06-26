@@ -17,6 +17,10 @@ const coalesce = (o: any, ...keys: string[]) => {
   return null;
 };
 
+// Fecha relevante de un pago: la fecha del pago cuenta como fecha de cobro.
+// Usa la misma prioridad de columnas que el resto del CRM (esquema antiguo/nuevo).
+const paymentDate = (p: any): string => coalesce(p, 'fecha_prevista_cobro', 'fecha_vencimiento', 'fecha') || '';
+
 const TABLES = ['leads', 'clients', 'interactions', 'payments', 'tasks', 'affiliates'];
 
 // Respuesta tipo fetch para no tocar el código de las páginas.
@@ -78,7 +82,7 @@ async function dashboard() {
     const ym = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
     const label = d.toLocaleDateString('es-ES', { month: 'short' });
     const total = payments
-      .filter(p => p.estado === 'cobrado' && String(coalesce(p, 'fecha') || '').slice(0, 7) === ym)
+      .filter(p => p.estado === 'cobrado' && paymentDate(p).slice(0, 7) === ym)
       .reduce((s, p) => s + (Number(p.importe) || 0), 0);
     revenueByMonth.push({ label, total });
   }
@@ -103,7 +107,7 @@ async function dashboard() {
     clientesActivos: clients.filter(c => !c.estado_cliente || c.estado_cliente !== 'Baja').length,
     pagosPendientesCount: pendientes.length,
     pagosPendientesTotal: pendientes.reduce((s, p) => s + (Number(p.importe) || 0), 0),
-    cobradoMes: payments.filter(p => p.estado === 'cobrado' && p.fecha >= startOfMonth() && p.fecha <= t).reduce((s, p) => s + (Number(p.importe) || 0), 0),
+    cobradoMes: payments.filter(p => { const f = paymentDate(p); return p.estado === 'cobrado' && f >= startOfMonth() && f <= t; }).reduce((s, p) => s + (Number(p.importe) || 0), 0),
     tareasPendientesCount: tasks.filter(t2 => !t2.estado || t2.estado !== 'Completado').length,
     clientesRevisionCount: clients.filter(clienteRevisable).length,
     comisionesPendientesTotal: payments.filter(p => p.afiliado_id && p.comision_estado !== 'pagada').reduce((s, p) => s + (Number(p.importe) || 0) * (Number(p.comision_pct) || 0) / 100, 0),
@@ -155,7 +159,7 @@ async function weeklyReport() {
     newLeads: leads.filter(l => l.fecha_primer_contacto && l.fecha_primer_contacto >= week),
     overdueActions: leads.filter(l => { const f = coalesce(l, 'proximo_follow_up', 'fecha_proxima_accion'); return f && f < t; }),
     weekInteractions: interactions.filter(i => i.fecha && i.fecha >= week),
-    monthRevenue: payments.filter(p => p.estado === 'cobrado' && p.fecha >= som).reduce((s, p) => s + (Number(p.importe) || 0), 0),
+    monthRevenue: payments.filter(p => p.estado === 'cobrado' && paymentDate(p) >= som).reduce((s, p) => s + (Number(p.importe) || 0), 0),
     pendingRevenue: payments.filter(p => !p.estado || p.estado !== 'cobrado').reduce((s, p) => s + (Number(p.importe) || 0), 0),
   };
 }

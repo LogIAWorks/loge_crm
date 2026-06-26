@@ -12,6 +12,9 @@ const val = (obj: any, ...keys: string[]) => {
 
 const ESTADOS = ['pendiente', 'cobrado', 'parcial', 'vencido'];
 
+// "Hoy" en horario de Madrid (YYYY-MM-DD), para detectar fechas de cobro futuras.
+const hoyISO = () => new Date().toLocaleDateString('en-CA', { timeZone: 'Europe/Madrid' });
+
 const Payments = () => {
   const [payments, setPayments] = useState<any[]>([]);
   const [search, setSearch] = useState('');
@@ -250,6 +253,11 @@ const Payments = () => {
                     <div className="col-span-2">
                       <label className="text-[10px] font-black text-brand uppercase tracking-widest mb-1 block">Fecha *</label>
                       <input type="date" required className="input" value={formData.fecha || ''} onChange={e => setFormData({...formData, fecha: e.target.value})} />
+                      {formData.estado === 'cobrado' && formData.fecha && formData.fecha > hoyISO() && (
+                        <p className="mt-1.5 text-[10px] font-bold text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-2.5 py-1.5">
+                          ⚠ Fecha futura: este cobro contará en el mes de esa fecha, no en el actual. Si ya lo has cobrado, pon la fecha real de cobro.
+                        </p>
+                      )}
                     </div>
                   </div>
                   <div className="grid grid-cols-2 gap-4 pt-4 border-t border-gray-50">

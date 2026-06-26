@@ -378,12 +378,13 @@ const Pipeline = () => {
                     <input required className="input" placeholder="Ej: Web, Agente de Voz..." value={formData.interes_principal || ''} onChange={e => setFormData({...formData, interes_principal: e.target.value})} />
                   </div>
                   <div>
-                    <label className="text-[10px] font-black text-brand uppercase tracking-widest mb-1 block">Último Contacto *</label>
-                    <input type="date" required className="input" value={formData.ultimo_contacto || ''} onChange={e => setFormData({...formData, ultimo_contacto: e.target.value})} />
+                    <label className="text-[10px] font-black text-brand uppercase tracking-widest mb-1 block">Último Contacto</label>
+                    <input type="date" className="input" value={formData.ultimo_contacto || ''} onChange={e => setFormData({...formData, ultimo_contacto: e.target.value})} />
                   </div>
                   <div>
-                    <label className="text-[10px] font-black text-brand uppercase tracking-widest mb-1 block">Próximo Follow-up *</label>
-                    <input type="date" required className="input border-brand/20" value={formData.proximo_follow_up || ''} onChange={e => setFormData({...formData, proximo_follow_up: e.target.value})} />
+                    <label className="text-[10px] font-black text-brand uppercase tracking-widest mb-1 block">Próximo Follow-up</label>
+                    <input type="date" className="input border-brand/20" value={formData.proximo_follow_up || ''} onChange={e => setFormData({...formData, proximo_follow_up: e.target.value})} />
+                    <p className="text-[9px] text-gray-400 mt-1">Opcional · vacío si no requiere seguimiento</p>
                   </div>
                   <div className="col-span-2">
                     <label className="text-[10px] font-black text-brand uppercase tracking-widest mb-1 block">Nota Corta *</label>
