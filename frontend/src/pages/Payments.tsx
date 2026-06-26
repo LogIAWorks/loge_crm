@@ -57,12 +57,16 @@ const Payments = () => {
     const method = formData.id ? 'PATCH' : 'POST';
     const url = formData.id ? `/api/payments/${formData.id}` : '/api/payments';
     const tieneAfiliado = !!formData.afiliado_id;
+    // Un cobro siempre cuenta en su fecha. Si se marca 'cobrado' sin fecha o con
+    // fecha futura, se registra la fecha de cobro = hoy (cuenta en el mes en curso).
+    const fechaCobro = formData.estado === 'cobrado' && (!formData.fecha || formData.fecha > hoyISO())
+      ? hoyISO() : formData.fecha;
     const body: any = {
       cliente: formData.cliente,
       concepto: formData.concepto,
       importe: formData.importe ? Number(formData.importe) : null,
       estado: formData.estado,
-      fecha: formData.fecha,
+      fecha: fechaCobro,
       factura_emitida: formData.factura_emitida || null,
       contrato_firmado: formData.contrato_firmado || null,
       notas: formData.notas || null,
@@ -246,7 +250,16 @@ const Payments = () => {
                     </div>
                     <div>
                       <label className="text-[10px] font-black text-brand uppercase tracking-widest mb-1 block">Estado *</label>
-                      <select className="input" value={formData.estado || 'pendiente'} onChange={e => setFormData({...formData, estado: e.target.value})}>
+                      <select className="input" value={formData.estado || 'pendiente'} onChange={e => {
+                        const estado = e.target.value;
+                        setFormData((prev: any) => ({
+                          ...prev,
+                          estado,
+                          // Al marcar 'cobrado', la fecha de cobro pasa a ser hoy si estaba vacía
+                          // o era futura: así el cobro cuenta siempre en el mes en curso.
+                          fecha: estado === 'cobrado' && (!prev.fecha || prev.fecha > hoyISO()) ? hoyISO() : prev.fecha,
+                        }));
+                      }}>
                         {ESTADOS.map(e => <option key={e} value={e}>{e}</option>)}
                       </select>
                     </div>

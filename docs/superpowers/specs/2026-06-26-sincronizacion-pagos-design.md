@@ -25,7 +25,9 @@ Consecuencias observadas por el usuario:
 
 1. **Pagos es la única fuente de verdad.** El estado de pago e importes del cliente se
    **derivan** de sus pagos. Ya no se editan a mano.
-2. **La fecha del pago** es la fecha de cobro a efectos de "Cobrado (Mes)". Sin columna nueva.
+2. **Fecha de cobro automática:** al marcar un pago como `cobrado`, si la fecha está
+   vacía o es futura se registra la fecha de cobro = hoy. Así "marcar cobrado" siempre
+   cuenta en el mes en curso, sin pasos manuales. Reutiliza la columna `fecha` (sin columna nueva).
 3. **Semáforo de cliente, 3 niveles por vencimiento:**
    - 🟢 `Al día` = sin pagos sin cobrar.
    - 🟡 `Pendiente` = tiene pagos sin cobrar pero no vencidos (fecha futura o sin fecha).
@@ -58,13 +60,20 @@ En [api.ts](../../../frontend/src/api.ts):
 - `cobradoMes` y `revenueByMonth` usan `paymentDate(p)` (en vez de solo `p.fecha`) para
   decidir el mes; se mantiene el filtro `estado === 'cobrado'`.
 
-### Aviso de fecha de cobro futura
+### Fecha de cobro automática + aviso
 
-En [Payments.tsx](../../../frontend/src/pages/Payments.tsx), al editar un pago con
-`estado === 'cobrado'` y una `fecha` posterior a hoy (Europe/Madrid), se muestra un aviso
-ámbar bajo el campo de fecha: el cobro contará en el mes de esa fecha, no en el actual.
-Evita descuadres de "Cobrado (Mes)" por fechas futuras (caso real: un cobro de hoy guardado
-con fecha del mes siguiente). No bloquea el guardado.
+En [Payments.tsx](../../../frontend/src/pages/Payments.tsx):
+- Al cambiar el estado a `cobrado`, si la fecha está vacía o es futura, se pone hoy
+  automáticamente (`onChange` del selector de estado). Salvaguarda equivalente en
+  `handleSubmit` para que ningún cobro se guarde con fecha futura/vacía.
+- Si aun así se deja una fecha futura en un cobro (edición manual), se muestra un aviso
+  ámbar bajo el campo de fecha. No bloquea el guardado.
+
+Motivo: el usuario cobra en el momento (mes actual) pero los pagos llevan una fecha
+*prevista* futura; con la regla anterior ("usar la fecha tal cual") el cobro aparecía en
+un mes futuro. La fecha automática hace que "marcar cobrado" se refleje siempre en el mes
+en curso (validado en flujo real: Guridi Parte 2 de pendiente→cobrado, dashboard
+3.114,64 € → 3.387,50 €).
 
 ### Reinicio mensual (comportamiento dinámico, ya existente)
 
